@@ -1,7 +1,7 @@
 # Map
 
 Map is an interactive map built for field teams.
-Visualises weekly PAR data on a Mapbox map with boundary layers, buffer circles, and an admin dashboard backed by Supabase.
+Visualises data on a Mapbox map with boundary layers, buffer circles, and an admin dashboard backed by Supabase.
 
 ---
 
