@@ -1,7 +1,7 @@
-# PAR Map — Supamoto Field Dashboard
+# Map
 
-Interactive loan portfolio map for ECS Fintech Lusaka field teams.
-Visualises weekly PAR data on a Mapbox map with boundary layers, buffer circles, and an admin dashboard backed by Supabase.
+Map is an interactive map built for field teams.
+Visualises data on a Mapbox map with boundary layers, buffer circles, and an admin dashboard backed by Supabase.
 
 ---
 
@@ -99,9 +99,9 @@ WHERE id = (SELECT id FROM auth.users WHERE email = 'your@email.com');
 
 ---
 
-## Weekly Data Update
+## Data Update
 
-Each week the data analyst replaces `src/data/customers.ts`:
+Each upload of Customer data, the Admin replaces `src/data/customers.ts`:
 
 1. Export the PAR CSV from the loan system
 2. Run the conversion script:
@@ -148,7 +148,7 @@ Create a storage bucket called `kmz-files` and set it to **Public**.
 ## Deployment
 
 1. Push to `main` on GitHub
-2. Vercel picks up the push and runs `next build`
+2. `Vercel picks up the push and runs next build`
 3. Add all `.env.local` variables to Vercel → Project → Environment Variables
 4. Share the Vercel URL with field teams
 

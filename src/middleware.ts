@@ -1,46 +1,34 @@
-// ─── src/middleware.ts ────────────────────────────────────────────────────────
-// Edge middleware — runs before every matched request.
-// Checks for an active Supabase session cookie to protect /admin.
-// Full role enforcement (admin-only) lives inside admin.tsx via useAuth().
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
 
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({ request })
 
-// Supabase v2 stores the session in:  sb-<projectRef>-auth-token
-// Extract the project ref from the env URL at build time.
-const PROJECT_REF =
-  (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '')
-    .replace('https://', '')
-    .split('.')[0]
-
-function hasSession(req: NextRequest): boolean {
-  const cookieName = `sb-${PROJECT_REF}-auth-token`
-  // Supabase sometimes splits large JWTs across .0 / .1 chunks
-  return !!(
-    req.cookies.get(cookieName)?.value ||
-    req.cookies.get(`${cookieName}.0`)?.value
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) { return request.cookies.get(name)?.value },
+        set(name: string, value: string, options: CookieOptions) {
+          response.cookies.set({ name, value, ...options })
+        },
+        remove(name: string, options: CookieOptions) {
+          response.cookies.set({ name, value: '', ...options })
+        },
+      },
+    }
   )
-}
 
-export async function middleware(req: NextRequest) {
-  const res = NextResponse.next()
-  const loggedIn = hasSession(req)
+  // This refreshes the session so it doesn't expire while the user is active
+  await supabase.auth.getUser()
 
-  // Block unauthenticated access to /admin
-  if (req.nextUrl.pathname.startsWith('/admin') && !loggedIn) {
-    const loginUrl = new URL('/login', req.url)
-    loginUrl.searchParams.set('next', req.nextUrl.pathname)
-    return NextResponse.redirect(loginUrl)
-  }
-
-  // Prevent logged-in users from reaching /login or /register
-  if ((req.nextUrl.pathname === '/login' || req.nextUrl.pathname === '/register') && loggedIn) {
-    return NextResponse.redirect(new URL('/', req.url))
-  }
-
-  return res
+  return response
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/login', '/register'],
+  matcher: [
+    // Optimized: Runs on all routes EXCEPT static assets/images
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 }
