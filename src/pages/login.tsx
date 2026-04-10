@@ -59,34 +59,22 @@ export default function LoginPage() {
       }
     }
 
-    // Step 3: Confirm the session is active before navigating.
-    // The middleware checks the Supabase cookie — we must wait until
-    // supabase.auth.getSession() returns a valid session, which means
-    // the cookie is guaranteed to be written.
-    let sessionConfirmed = false
-    for (let i = 0; i < 10; i++) {
-      const { data: { session: check } } = await supabase.auth.getSession()
-      if (check) { sessionConfirmed = true; break }
-      await new Promise(r => setTimeout(r, 100))
-    }
-
-    if (!sessionConfirmed) {
-      setError('Session could not be confirmed. Please try again.')
-      setLoading(false)
-      return
-    }
-
     window.location.href = next
   }
 
   async function handleGoogle() {
     setGLoading(true)
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     })
+    if (error) {
+      setError('Google sign-in failed. Please try again.')
+      setGLoading(false)
+    }
+    // On success: page is redirecting to Google — don't reset gLoading
   }
 
   return (

@@ -11,9 +11,8 @@ import Head from 'next/head'
 
 import { KMZLayer, PAR_COLORS, computeStats } from '../types/par'
 import { parseKmz } from '../utils/kmzParser'
-import { CUSTOMERS, WEEK_LABEL } from '../data/customers'
-import type { Customer } from '../types/par'
 import { fetchLayers, toggleLayerVisibility } from '../lib/layerService'
+import { getCustomers } from '../lib/customerService'
 import { useAuth } from '../lib/useAuth'
 import { NavLogo, IconAdmin, IconSearch, IconX } from '../components/NavIcons'
 import {
@@ -93,6 +92,15 @@ export default function MapPage() {
   const [hovered, setHovered] = useState(false)
   const [teams, setTeams]   = useState<{ id: string; name: string; color: string; layerIds: string[] }[]>([])
   const hoverRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [customers, setCustomers]   = useState<any[]>([])
+  const [weekLabel, setWeekLabel]   = useState('')
+
+  useEffect(() => {
+    getCustomers().then(data => {
+      setCustomers(data)
+      if (data[0]?.week_label) setWeekLabel(data[0].week_label)
+    }).catch(console.error)
+  }, [])
 
   // Hydrate localStorage state client-side (avoids SSR hydration mismatch)
   useEffect(() => {
@@ -108,17 +116,17 @@ export default function MapPage() {
     } catch {}
   }, [])
 
-  const filteredCustomers = useMemo<Customer[]>(() => {
+  const filteredCustomers = useMemo<any[]>(() => {
     const q = search.toLowerCase()
-    let r = CUSTOMERS
-    if (q) r = r.filter(c =>
-      (c.contractRef ?? '').toLowerCase().includes(q) ||
+    let r = customers
+    if (q) r = r.filter((c: any) =>
+      (c.contract_ref ?? '').toLowerCase().includes(q) ||
       (c.name ?? '').toLowerCase().includes(q) ||
       (c.phone ?? '').toLowerCase().includes(q) ||
       (c.phone2 ?? '').toLowerCase().includes(q))
-    if (parFilter) r = r.filter(c => c.parStatus === parFilter)
-    return r.filter(c => c.lat >= -90 && c.lat <= 90 && c.lon >= -180 && c.lon <= 180 && !(c.lat === 0 && c.lon === 0))
-  }, [search, parFilter])
+    if (parFilter) r = r.filter((c: any) => c.par_status === parFilter)
+    return r.filter((c: any) => c.latitude >= -90 && c.latitude <= 90 && c.longitude >= -180 && c.longitude <= 180 && !(c.latitude === 0 && c.longitude === 0))
+  }, [customers, search, parFilter])
 
   const stats   = useMemo(() => computeStats(filteredCustomers), [filteredCustomers])
   const focused = search.trim() && filteredCustomers.length === 1 ? filteredCustomers[0] : null
@@ -267,7 +275,7 @@ export default function MapPage() {
                 <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: T.muted, marginBottom: 5 }}>Showing</div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                   <span style={{ fontFamily: 'DM Mono', fontSize: 22, color: T.onSurface, letterSpacing: '-0.02em' }}>{filteredCustomers.length.toLocaleString()}</span>
-                  <span style={{ fontSize: 11, color: T.muted }}>of {CUSTOMERS.length.toLocaleString()}</span>
+                  <span style={{ fontSize: 11, color: T.muted }}>of {customers.length.toLocaleString()}</span>
                 </div>
               </div>
               {([
@@ -300,7 +308,7 @@ export default function MapPage() {
           {section === 'filters' && (
             <div className="sIn" style={{ padding: '6px 12px 12px' }}>
               {[
-                { label: 'All customers', value: '',         count: CUSTOMERS.length },
+                { label: 'All customers', value: '',         count: customers.length },
                 { label: 'ONTIME',        value: 'ONTIME',   count: stats.ontime },
                 { label: 'PAR 1-30',      value: 'PAR 1-30', count: stats.par30 },
                 { label: 'PAR 31-60',     value: 'PAR 31-60',count: stats.par60 },

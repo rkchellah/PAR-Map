@@ -19,16 +19,16 @@ export type PARMovement =
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
 export interface Customer {
-  contractRef: string
+  contract_ref: string
   name: string
   phone: string
-  phone2: string // For the second Phone numbers column
+  phone2: string
   area: string
-  parStatus: PARStatus
-  leadGenerate: string
-  leadGenerateName: string
-  lat: number
-  lon: number
+  par_status: PARStatus
+  lead_generate: string
+  lead_generate_name: string
+  latitude: number
+  longitude: number
 }
 
 export interface KMZLayer {
@@ -62,7 +62,7 @@ export const PAR_RING_COLOR = 'transparent'
  * Since lastPurchase is removed from the dataset, we just define Priority as PAR 90+.
  */
 export function isPriorityVisit(customer: Customer): boolean {
-  return customer.parStatus === 'PAR 90+'
+  return customer.par_status === 'PAR 90+'
 }
 
 // ─── Stats ────────────────────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ export function computeStats(customers: Customer[]): PARStats {
       stats.priority++
     }
 
-    switch (c.parStatus) {
+    switch (c.par_status) {
       case 'ONTIME':    stats.ontime++; break
       case 'PAR 1-30':  stats.par30++;  break
       case 'PAR 31-60': stats.par60++;  break

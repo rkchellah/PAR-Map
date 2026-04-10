@@ -11,7 +11,8 @@ import {
   toggleLayerVisibility, updateLayerColor, renameLayer,
 } from '../lib/layerService'
 import { useAuth } from '../lib/useAuth'
-import { CUSTOMERS, WEEK_LABEL } from '../data/customers'
+import { syncCustomers, getCustomers } from '../lib/customerService'
+import { supabase } from '../lib/supabase'
 import { isPriorityVisit, PAR_COLORS } from '../types/par'
 import type { KMZLayer } from '../types/par'
 import Papa from 'papaparse'
@@ -251,17 +252,19 @@ function LayerRow({ layer, onToggle, onDelete, onAssign, onUnassign, showUnassig
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const router = useRouter()
-  const { isAdmin, loading: authLoading, signOut } = useAuth()
+  const { isAdmin, loading: authLoading, authError, signOut } = useAuth()
 
   // ── Auth guard ─────────────────────────────────────────────────────────────
   // Only redirect AFTER loading is fully done (session + profile both resolved).
   // Never redirect while loading=true — profile fetch is async and isAdmin
   // will be false until it completes.
+  // Do NOT redirect if there's an authError — show the error instead so the
+  // user isn't silently looped back to login with no explanation.
   useEffect(() => {
-    if (!authLoading && !isAdmin) {
+    if (!authLoading && !authError && !isAdmin) {
       router.replace('/login?next=/admin')
     }
-  }, [authLoading, isAdmin, router])
+  }, [authLoading, authError, isAdmin, router])
 
   // Still loading session or profile — show spinner, never redirect
   if (authLoading) {
@@ -269,6 +272,26 @@ export default function AdminPage() {
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f7f7' }}>
         <div style={{ width: 18, height: 18, borderRadius: '50%', border: '2.5px solid #e8e8e8', borderTopColor: '#111', animation: 'spin 0.7s linear infinite' }} />
         <style>{`@keyframes spin{to{transform:rotate(360deg);}}`}</style>
+      </div>
+    )
+  }
+
+  // Profile fetch failed — show error instead of silently redirecting
+  if (authError) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f7f7', fontFamily: 'Inter,system-ui,sans-serif' }}>
+        <style>{`@keyframes spin{to{transform:rotate(360deg);}}`}</style>
+        <div style={{ maxWidth: 360, textAlign: 'center', padding: 24 }}>
+          <div style={{ fontSize: 13, color: T.error, background: T.errorDim, border: `1px solid rgba(192,57,43,0.15)`, borderRadius: 8, padding: '12px 16px', marginBottom: 20 }}>
+            {authError}
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            style={{ fontSize: 13, fontWeight: 600, color: T.ink, background: T.card, border: `1.5px solid ${T.border}`, borderRadius: 8, padding: '10px 20px', cursor: 'pointer' }}
+          >
+            Retry
+          </button>
+        </div>
       </div>
     )
   }
@@ -312,10 +335,19 @@ function AdminContent({ signOut }: { signOut: () => void }) {
   const [bufStatus, setBufStatus] = useState<Status>({ type: 'idle', msg: '' })
   const [prev2, setPrev2]         = useState<Record<string, string>[]>([])
 
-  const [parCsv, setParCsv]       = useState<File | null>(null)
-  const [weekLabel, setWeekLabel] = useState('')
-  const [parStatus, setParStatus] = useState<Status>({ type: 'idle', msg: '' })
-  const [prev3, setPrev3]         = useState<Record<string, string>[]>([])
+  const [parCsv, setParCsv]             = useState<File | null>(null)
+
+  const [parStatus, setParStatus]       = useState<Status>({ type: 'idle', msg: '' })
+  const [prev3, setPrev3]               = useState<Record<string, string>[]>([])
+  const [liveCustomers, setLiveCustomers] = useState<any[]>([])
+  const [liveWeekLabel, setLiveWeekLabel] = useState('')
+
+  useEffect(() => {
+    getCustomers().then(data => {
+      setLiveCustomers(data)
+      if (data[0]?.week_label) setLiveWeekLabel(data[0].week_label)
+    }).catch(() => {})
+  }, [])
 
   const boundaryLayers = layers.filter(l => !l.name.startsWith('Buffers —'))
   const bufferLayers   = layers.filter(l => l.name.startsWith('Buffers —'))
@@ -387,24 +419,53 @@ function AdminContent({ signOut }: { signOut: () => void }) {
     setParCsv(f); setParStatus({ type: 'idle', msg: '' })
     Papa.parse(f, { header: true, skipEmptyLines: true, complete: r => setPrev3((r.data as Record<string, string>[]).slice(0, 10)) })
   }
-  function handleGenerateCustomers() {
-    if (!parCsv || !weekLabel.trim()) return; setParStatus({ type: 'loading', msg: '' })
+  async function handleGenerateCustomers() {
+    if (!parCsv) return
+    setParStatus({ type: 'loading', msg: 'Syncing to database...' })
+
     Papa.parse(parCsv, {
-      header: true, skipEmptyLines: true,
-      complete: res => {
-        const rows: object[] = []; let skipped = 0
+      header: true,
+      skipEmptyLines: true,
+      complete: async (res) => {
+        const rows: any[] = []
+        let skipped = 0
+
         for (const row of res.data as Record<string, string>[]) {
-          const lat = parseFloat(row['Latitude']), lon = parseFloat(row['Longitude'])
-          if (!row['Latitude'] || !row['Longitude'] || isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0) { skipped++; continue }
-          rows.push({ contractRef: row['Contract reference'] ?? '', area: row['Area'] ?? '', lat, lon, parStatus: row['PAR Status'] ?? '', parMovement: row['PAR Movement'] ?? '', lastPurchase: convertDate(row['Last Purchase']), collectionName: row['Collection Name'] ?? '', lastInteractionDate: convertDate(row['Last Interaction Date']), lastInteractionComment: row['Last Interaction Comment'] ?? '', phone: row['Phone'] ?? '', isPriorityVisit: false })
+          const lat = parseFloat(row['Latitude'])
+          const lon = parseFloat(row['Longitude'])
+          if (!row['Latitude'] || !row['Longitude'] || isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+            skipped++
+            continue
+          }
+          rows.push({
+            contract_ref: row['Contract reference'] ?? '',
+            name: row['Name'] ?? '',
+            phone: row['Phone'] ?? '',
+            phone2: row['Phone 2'] ?? '',
+            area: row['Area'] ?? '',
+            par_status: row['PAR Status'] ?? '',
+            lead_generate: row['Lead Generate'] ?? '',
+            lead_generate_name: row['Lead Generator Name'] ?? '',
+            latitude: lat,
+            longitude: lon,
+          })
         }
-        const lines = [`// Generated by PAR Map Admin`, `// Week: ${weekLabel}`, `// Records: ${rows.length}`, ``, `import { Customer, isPriorityVisit } from '../types/par'`, ``, `export const WEEK_LABEL = '${weekLabel}'`, ``, `const raw: Omit<Customer, 'isPriorityVisit'>[] = [`, ...rows.map(r => `  ${JSON.stringify(r)},`), `]`, ``, `export const CUSTOMERS: Customer[] = raw.map(c => ({`, `  ...c,`, `  isPriorityVisit: isPriorityVisit({ ...c, isPriorityVisit: false }),`, `}))`]
-        const a = document.createElement('a')
-        a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/plain' }))
-        a.download = 'customers.ts'; a.click()
-        setParStatus({ type: 'ok', msg: `${rows.length} records${skipped > 0 ? ` (${skipped} skipped)` : ''}` })
-        setParCsv(null); setPrev3([])
-      }, error: () => setParStatus({ type: 'err', msg: 'Failed to parse CSV' }),
+
+        try {
+          await syncCustomers(rows, '')
+          setParStatus({ type: 'ok', msg: `${rows.length} records synced. ${skipped} skipped.` })
+          setParCsv(null)
+          setPrev3([])
+          // Refresh live registry
+          getCustomers().then(data => {
+            setLiveCustomers(data)
+            if (data[0]?.week_label) setLiveWeekLabel(data[0].week_label)
+          }).catch(() => {})
+        } catch (e: any) {
+          setParStatus({ type: 'err', msg: e.message || 'Sync failed' })
+        }
+      },
+      error: () => setParStatus({ type: 'err', msg: 'Failed to parse CSV' }),
     })
   }
   function handleGenerateBuffers() {
@@ -547,7 +608,7 @@ function AdminContent({ signOut }: { signOut: () => void }) {
               <div className="fi">
                 <div style={{ marginBottom: 24 }}>
                   <h1 style={{ fontSize: 21, fontWeight: 700, color: T.ink, letterSpacing: '-0.03em' }}>Customer Data</h1>
-                  <p style={{ fontSize: 13, color: T.muted, marginTop: 5, lineHeight: 1.6 }}>Upload weekly PAR CSV to generate customers.ts</p>
+                  <p style={{ fontSize: 13, color: T.muted, marginTop: 5, lineHeight: 1.6 }}>Upload weekly PAR CSV to sync customer data to the database</p>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
                   <Card>
@@ -559,22 +620,41 @@ function AdminContent({ signOut }: { signOut: () => void }) {
                       </div>
                       <DZ file={parCsv} label="Drop .csv file here" hint="CSV only" accept=".csv" id="par-csv" onSel={onParCsvSelect} />
                       {prev3.length > 0 && <PrevTable data={prev3} cols={['Contract reference', 'Area', 'PAR Status']} />}
-                      <div><FL>Week label</FL><FI value={weekLabel} onChange={e => setWeekLabel(e.target.value)} placeholder="e.g. W14 · Apr 2026" /></div>
-                      <Btn onClick={handleGenerateCustomers} disabled={!parCsv || !weekLabel.trim()}><IconDownload size={14} /> Generate customers.ts</Btn>
+                      <Btn onClick={handleGenerateCustomers} disabled={!parCsv}><IconUpload size={14} /> Sync to Database</Btn>
                       <StatusMsg s={parStatus} />
+                      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 14, marginTop: 4 }}>
+                        <Btn
+                          variant="danger"
+                          size="sm"
+                          onClick={async () => {
+                            if (!confirm('Delete all customer data? This cannot be undone.')) return
+                            setParStatus({ type: 'loading', msg: 'Deleting...' })
+                            const { error } = await supabase.from('customers').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+                            if (error) {
+                              setParStatus({ type: 'err', msg: error.message })
+                            } else {
+                              setParStatus({ type: 'ok', msg: 'All customer data deleted.' })
+                              setLiveCustomers([])
+                              setLiveWeekLabel('')
+                            }
+                          }}
+                        >
+                          <IconTrash size={13} /> Clear all customer data
+                        </Btn>
+                      </div>
                     </div>
                   </Card>
                   <Card>
-                    <CardHeader title="Live Registry" sub={WEEK_LABEL} right={<span style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, background: T.low, color: T.mid, fontFamily: 'DM Mono' }}>{CUSTOMERS.length.toLocaleString()}</span>} />
+                    <CardHeader title="Live Registry" sub={liveWeekLabel} right={<span style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, background: T.low, color: T.mid, fontFamily: 'DM Mono' }}>{liveCustomers.length.toLocaleString()}</span>} />
                     <div style={{ maxHeight: 460, overflowY: 'auto' }}>
-                      {CUSTOMERS.map(c => (
-                        <div key={c.contractRef} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 18px', borderBottom: `1px solid ${T.border}`, transition: 'background 0.1s' }}
+                      {liveCustomers.map(c => (
+                        <div key={c.contract_ref} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 18px', borderBottom: `1px solid ${T.border}`, transition: 'background 0.1s' }}
                           onMouseEnter={e => e.currentTarget.style.background = T.low} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                          <Dot color={PAR_COLORS[c.parStatus] ?? '#ccc'} />
+                          <Dot color={PAR_COLORS[c.par_status] ?? '#ccc'} />
                           {isPriorityVisit(c) && <IconAlertCircle size={11} color={T.error} style={{ flexShrink: 0 }} />}
-                          <span style={{ fontSize: 11, fontFamily: 'DM Mono', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: T.ink }}>{c.contractRef}</span>
+                          <span style={{ fontSize: 11, fontFamily: 'DM Mono', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: T.ink }}>{c.contract_ref}</span>
                           <span style={{ fontSize: 11, color: T.muted, flexShrink: 0 }}>{c.area}</span>
-                          <span className={`text-[10px] font-semibold px-1.5 py0.5 rounded-full shrink-0 ${parBadgeCls(c.parStatus)}`} style={{ fontSize: 10, whiteSpace: 'nowrap' }}>{c.parStatus}</span>
+                          <span className={`text-[10px] font-semibold px-1.5 py0.5 rounded-full shrink-0 ${parBadgeCls(c.par_status)}`} style={{ fontSize: 10, whiteSpace: 'nowrap' }}>{c.par_status}</span>
                         </div>
                       ))}
                     </div>

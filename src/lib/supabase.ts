@@ -1,12 +1,13 @@
 // ─── src/lib/supabase.ts ──────────────────────────────────────────────────────
 
+import { createBrowserClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-// ── Browser / SSR client — safe to import anywhere ───────────────────────────
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
+// ── Browser client — uses cookies so middleware can read the session ──────────
+export const supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON)
 
 // ── Admin client — lazy, server-only ─────────────────────────────────────────
 // NOT created at module load time so it never runs in the browser.

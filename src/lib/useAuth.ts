@@ -5,18 +5,27 @@ import type { User } from '@supabase/supabase-js'
 import type { Profile } from './supabase'
 
 export function useAuth() {
-  const [user, setUser]       = useState<User | null>(null)
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser]           = useState<User | null>(null)
+  const [profile, setProfile]     = useState<Profile | null>(null)
+  const [loading, setLoading]     = useState(true)
+  const [authError, setAuthError] = useState<string | null>(null)
   const initialized = useRef(false)
 
   async function fetchProfile(uid: string): Promise<void> {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('id, full_name, role, avatar_url')
       .eq('id', uid)
       .single()
-    setProfile(data ?? null)
+
+    if (error) {
+      console.error('Profile fetch failed:', error.message)
+      setAuthError('Could not load your profile. Please refresh or contact support.')
+      setProfile(null)
+      return
+    }
+    setAuthError(null)
+    setProfile(data)
   }
 
   useEffect(() => {
@@ -53,6 +62,7 @@ export function useAuth() {
     profile,
     isAdmin: profile?.role === 'admin',
     loading,
+    authError,
     signOut: () => supabase.auth.signOut(),
   }
 }

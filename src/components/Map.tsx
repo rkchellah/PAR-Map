@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useRef } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Popup, GeoJSON, LayerGroup, ZoomControl, useMap, Pane } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, Popup, GeoJSON, ZoomControl, useMap, Pane } from 'react-leaflet'
+import MarkerClusterGroup from 'react-leaflet-cluster'
+import 'react-leaflet-cluster/dist/assets/MarkerCluster.css'
+import 'react-leaflet-cluster/dist/assets/MarkerCluster.Default.css'
 import { Customer, KMZLayer } from '../types/par'
 import { PopupCard } from './PopupCard'
 import {
@@ -39,7 +42,7 @@ function FlyToController({ customer }: { customer: Customer | null | undefined }
 
   useEffect(() => {
     if (!customer) return
-    map.flyTo([customer.lat, customer.lon], 17, { duration: 0.8 })
+    map.flyTo([customer.latitude, customer.longitude], 17, { duration: 0.8 })
     const timer = setTimeout(() => {
       markerRef.current?.openPopup()
     }, 850)
@@ -52,7 +55,7 @@ function FlyToController({ customer }: { customer: Customer | null | undefined }
   return (
     <CircleMarker
       ref={markerRef}
-      center={[customer.lat, customer.lon]}
+      center={[customer.latitude, customer.longitude]}
       radius={getMarkerRadius(customer) + 5}
       pathOptions={{ color: '#2563eb', fillColor: color, fillOpacity: 1, weight: 3 }}
     >
@@ -83,41 +86,24 @@ export default function Map({ customers, kmzLayers, onKMZDrop, mapStyle, focused
   const customerMarkers = React.useMemo(() => {
     return customers.map((customer) => {
       const color = getMarkerColor(customer)
-      const visualRadius = getMarkerRadius(customer)
-
+      const radius = getMarkerRadius(customer)
       return (
-        <React.Fragment key={customer.contractRef}>
-          {/* Visible dot with black outline */}
-          <CircleMarker
-            center={[customer.lat, customer.lon]}
-            radius={visualRadius}
-            pathOptions={{
-              color: '#000000',
-              fillColor: color,
-              fillOpacity: 1,
-              weight: 1,
-            }}
-            interactive={false}
-          />
-          {/* Invisible oversized hit-target that owns the Popup */}
-          <CircleMarker
-            center={[customer.lat, customer.lon]}
-            // weight/2 adds to the hit radius — 14px stroke = +7px click buffer
-            radius={visualRadius}
-            pathOptions={{
-              color: 'transparent',
-              fillColor: 'transparent',
-              fillOpacity: 0,
-              weight: 14,
-              opacity: 0,
-            }}
-            bubblingMouseEvents={false}
-          >
+        <CircleMarker
+          key={customer.contract_ref}
+          center={[customer.latitude, customer.longitude]}
+          radius={radius + 2}
+          pathOptions={{
+            color: '#000000',
+            fillColor: color,
+            fillOpacity: 1,
+            weight: 1,
+          }}
+          bubblingMouseEvents={false}
+        >
           <Popup className="par-popup">
             <PopupCard customer={customer} />
           </Popup>
-          </CircleMarker>
-        </React.Fragment>
+        </CircleMarker>
       )
     })
   }, [customers])
@@ -179,9 +165,13 @@ export default function Map({ customers, kmzLayers, onKMZDrop, mapStyle, focused
 
         {/* Customer markers in a higher-z pane so polygon fills don't intercept clicks */}
         <Pane name="customerPane" style={{ zIndex: 450 }}>
-          <LayerGroup key={customers.map(c => c.contractRef).join(',')}>
+          <MarkerClusterGroup
+            chunkedLoading
+            maxClusterRadius={50}
+            disableClusteringAtZoom={16}
+          >
             {customerMarkers}
-          </LayerGroup>
+          </MarkerClusterGroup>
         </Pane>
 
         <ZoomTracker onZoomChange={onZoomChange} />

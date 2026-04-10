@@ -1,161 +1,86 @@
-# Map
+Here is the final, comprehensive README.md for your project, incorporating the Luminous Curator design system, the Supabase architecture, and the specific operational requirements for your field teams in Lusaka.
 
-Map is an interactive map built for field teams.
-Visualises data on a Mapbox map with boundary layers, buffer circles, and an admin dashboard backed by Supabase.
+🌍 Interactive Map
+High-Performance Geospatial Dashboard & Portfolio Analytics
+An advanced mapping platform built with Next.js 15 and Supabase, designed for real-time visualization of loan portfolio status and geographic territory management. This tool enables field teams to navigate complex urban environments like Lusaka while providing administrators with a powerful dashboard for risk analysis and layer management.
 
----
+🎨 Design Philosophy: Luminous Curator
+The application utilizes a professional, high-contrast light-mode theme designed for maximum visibility in the field:
 
-## Quick Start
+Clarity: Tonal sidebars and glassmorphism navbars ensure essential metrics are scannable even in high-glare environments.
 
-```bash
-npm install
-cp .env.example .env.local   # fill in real values
-npm run dev
-```
+Typography: A refined mix of Manrope for the map interface, Inter for administrative tasks, and DM Mono for precise technical data.
 
-Open [http://localhost:3000](http://localhost:3000).
+Visual Status: Customer markers are color-coded by PAR status, with "Priority Visit" flags featuring a distinct red dot and yellow ring for immediate attention.
 
----
+🚀 Key Features
+Real-Time Portfolio Tracking: Monitor Total Portfolio, On-Time, and At-Risk (PAR) metrics across regional areas like Chilenje, Matero, and Kanyama.
 
-## Environment Variables
+Advanced Layer Management: Upload, rename, and recolor KMZ/KML/GeoJSON boundary layers.
 
-Create `.env.local` in the project root (never commit this file):
+Buffer Circle Generator: Create geodesic polygons (e.g., 1km/2km warehouse buffers) from CSV coordinates.
 
-```env
-NEXT_PUBLIC_MAPBOX_TOKEN=pk.eyJ1...
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGc...
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...
-```
+Role-Based Access: Secure /admin dashboard protected by Supabase Auth and Edge Middleware.
 
-| Variable | Where to get it |
-|---|---|
-| `NEXT_PUBLIC_MAPBOX_TOKEN` | Mapbox Dashboard → Access Tokens |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Project Settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API |
+High Performance: Optimized with ssr: false for Leaflet and preferCanvas: true to handle thousands of data points smoothly on mobile.
 
----
-
-## Pages
-
-| Route | Access | Purpose |
-|---|---|---|
-| `/` | Public | Main map — customer dots, filters, boundary layers |
-| `/login` | Public | Email/password + Google OAuth sign-in |
-| `/register` | Public | Self-registration (role request) |
-| `/admin` | Admin only | Dashboard — customer data, layers, buffer circles |
-| `/auth/callback` | Internal | OAuth redirect handler |
-| `/forgot-password` | Public | Password reset |
-
----
-
-## Project Structure
-
-```
+🛠 Technical Stack
+Layer	Technology
+Framework	Next.js 15 (App/Pages Router)
+Database/Auth	Supabase
+Mapping	Mapbox + Leaflet
+Parsing	JSZip (KMZ), PapaParse (CSV), DOMParser (KML)
+Styling	Tailwind CSS + Luminous Tokens
+📂 Project Architecture
+Plaintext
 src/
-├── components/          # Shared UI components and icons
+├── components/         
+│   ├── Map.tsx         # Dynamic Leaflet implementation (No-SSR)
+│   └── NavIcons.tsx    # Custom Luminous UI elements
 ├── data/
-│   └── customers.ts     # Weekly PAR data — replace this each week
+│   └── customers.ts    # Weekly PAR data (Updated via Admin)
 ├── lib/
-│   ├── supabase.ts      # Supabase client + Profile type
-│   ├── useAuth.ts       # Auth hook — user, profile, isAdmin, loading
-│   └── layerService.ts  # fetchLayers, uploadLayer, deleteLayer, etc.
-├── pages/
-│   ├── index.tsx        # Map dashboard (public)
-│   ├── admin.tsx        # Admin dashboard (admin role required)
-│   ├── login.tsx        # Sign in page
-│   ├── register.tsx     # Registration page
-│   ├── auth/
-│   │   └── callback.tsx # OAuth callback
-│   └── api/
-│       └── userauth.ts  # Server-side auth API route
-├── types/
-│   └── par.ts           # TypeScript types and PAR helpers
-└── utils/
-    └── kmzParser.ts     # KMZ/KML → GeoJSON parser (JSZip + DOMParser)
-middleware.ts             # Edge middleware — protects /admin route
-```
+│   ├── supabase.ts     # Client & lazy Admin client
+│   ├── useAuth.ts      # Auth hook with race-condition fix
+│   └── layerService.ts # KMZ persistence & visibility logic
+├── utils/
+│   └── kmzParser.ts    # Client-side file conversion
+└── middleware.ts       # Edge-based session cookie protection
+📋 Environment Variables
+Create a .env.local file with the following keys:
 
----
+Code snippet
+NEXT_PUBLIC_MAPBOX_TOKEN=pk.eyJ1...
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbG...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbG... # Server-only
+🏗 Setup & Deployment
+Install: npm install
 
-## Authentication
+Database: Execute the SQL migrations in Supabase to create profiles, kmz_layers, and teams tables.
 
-- **Public users** — no login needed. View map, search customers, toggle layers.
-- **Admin users** — must have `role = 'admin'` in the `profiles` table.
-- Auth is handled by Supabase (email/password + Google OAuth).
-- The Edge middleware protects `/admin` by checking for a valid session cookie.
-- Role enforcement happens in `useAuth()` inside `admin.tsx`.
+Storage: Create a public storage bucket named kmz-files in your Supabase dashboard.
 
-### Promoting a user to admin
+Admin Access: Promote a user to admin via the Supabase SQL editor:
 
-Run in the Supabase SQL Editor:
+SQL
+UPDATE profiles SET role = 'admin' WHERE id = 'user-uuid-here';
+Deploy: Connect your repository to Vercel and add the environment variables listed above.
 
-```sql
-UPDATE public.profiles
-SET role = 'admin'
-WHERE id = (SELECT id FROM auth.users WHERE email = 'your@email.com');
-```
+📈 Weekly Data Update Workflow
+To update the customer data displayed on the map:
 
----
+Export the latest PAR CSV from your loan management system.
 
-## Data Update
+Use the Admin Portal to upload the CSV, which generates the updated customers.ts.
 
-Each upload of Customer data, the Admin replaces `src/data/customers.ts`:
+The map will automatically refresh to reflect the new regional Risk % and priority visit flags.
 
-1. Export the PAR CSV from the loan system
-2. Run the conversion script:
-   ```bash
-   python scripts/csv_to_ts.py
-   ```
-3. Replace `src/data/customers.ts` with the generated file
-4. Commit and push — Vercel redeploys automatically
+🛡 Credits & Author
+Author: Chella Kamina
 
----
+Project: Interactive Map (PAR Map)
 
-## Supabase Setup
+System: Luminous Curator UI
 
-### Database
-
-Run `supabase/migrations/001_initial.sql` in the Supabase SQL Editor to create:
-- `profiles` table (id, full_name, role, avatar_url)
-- `kmz_layers` table (id, name, color, locked, visible, file_path)
-- Row-level security policies
-- Trigger to auto-create a profile row on sign-up
-
-### Storage
-
-Create a storage bucket called `kmz-files` and set it to **Public**.
-
----
-
-## Stack
-
-| Layer | Technology |
-|---|---|
-| Framework | Next.js 15 + TypeScript |
-| Map | Leaflet + React-Leaflet |
-| Tiles | Mapbox |
-| Auth & DB | Supabase |
-| Charts | Recharts |
-| CSV parsing | PapaParse |
-| KMZ parsing | JSZip + DOMParser |
-| Styling | Tailwind CSS |
-| Deployment | Vercel |
-
----
-
-## Deployment
-
-1. Push to `main` on GitHub
-2. `Vercel picks up the push and runs next build`
-3. Add all `.env.local` variables to Vercel → Project → Environment Variables
-4. Share the Vercel URL with field teams
-
----
-
-## Key Constraints
-
-- Must load fast on mobile in Lusaka (low bandwidth)
-- Leaflet must never be imported at the top level of any page (use `dynamic` with `ssr: false`)
-- `.env.local` is gitignored — never commit real keys
+Optimized for ECS Fintech Lusaka field operations.

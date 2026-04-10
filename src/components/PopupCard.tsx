@@ -23,7 +23,7 @@ const PAR_BADGE: Record<string, { bg: string; text: string }> = {
 
 export const PopupCard: React.FC<PopupCardProps> = ({ customer }) => {
   const color = getMarkerColor(customer)
-  const badge = PAR_BADGE[customer.parStatus] || PAR_BADGE['ONTIME']
+  const badge = PAR_BADGE[customer.par_status] || PAR_BADGE['ONTIME']
 
   return (
     <div style={{ padding: '20px', width: '280px', fontFamily: 'Manrope, sans-serif' }}>
@@ -38,7 +38,7 @@ export const PopupCard: React.FC<PopupCardProps> = ({ customer }) => {
             color: '#1a1c20',
             letterSpacing: '-0.02em'
           }}>
-            {customer.contractRef}
+            {customer.contract_ref}
           </span>
         </div>
         <span style={{
@@ -51,7 +51,7 @@ export const PopupCard: React.FC<PopupCardProps> = ({ customer }) => {
           textTransform: 'uppercase',
           letterSpacing: '0.04em'
         }}>
-          {customer.parStatus}
+          {customer.par_status}
         </span>
       </div>
 
@@ -61,7 +61,7 @@ export const PopupCard: React.FC<PopupCardProps> = ({ customer }) => {
           { label: 'Name',           value: customer.name             || '-' },
           { label: 'Phone',          value: customer.phone            || '-' },
           { label: 'Area',           value: customer.area             || '-' },
-          { label: 'Lead Generator', value: customer.leadGenerateName || '-' },
+          { label: 'Lead Generator', value: customer.lead_generate_name || '-' },
         ].map((row, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
             <span style={{

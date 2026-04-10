@@ -10,29 +10,52 @@ export default function AuthCallback() {
   const router = useRouter()
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) {
-        router.replace('/login')
-        return
+    // router.query is not populated on first render in Next.js pages router
+    if (!router.isReady) return
+
+    const code = router.query.code as string | undefined
+    const next = (router.query.next as string) || '/'
+
+    async function exchange() {
+      try {
+        if (code) {
+          // PKCE flow: exchange the authorization code for a session
+          const { error } = await supabase.auth.exchangeCodeForSession(code)
+          if (error) throw error
+        } else {
+          // Implicit flow / email confirmation: session arrives via URL hash.
+          // getSession() will parse the fragment and hydrate the session.
+          const { data: { session }, error } = await supabase.auth.getSession()
+          if (error) throw error
+          if (!session) {
+            router.replace('/login?error=no_session')
+            return
+          }
+        }
+
+        // Fetch role so we can enforce admin-only redirect protection
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.replace('/login?error=no_user'); return }
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+
+        if (next.startsWith('/admin') && profile?.role !== 'admin') {
+          router.replace('/')
+        } else {
+          router.replace(next)
+        }
+      } catch (e: any) {
+        console.error('OAuth exchange failed:', e.message)
+        router.replace('/login?error=oauth_failed')
       }
+    }
 
-      // Fetch role so we can redirect to the right place
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', session.user.id)
-        .single()
-
-      const next = (router.query.next as string) || '/'
-
-      // If the user requested /admin but isn't an admin, send them home
-      if (next.startsWith('/admin') && profile?.role !== 'admin') {
-        router.replace('/')
-      } else {
-        router.replace(next)
-      }
-    })
-  }, [router])
+    exchange()
+  }, [router.isReady, router.query])
 
   return (
     <div style={{

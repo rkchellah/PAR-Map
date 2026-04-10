@@ -9,7 +9,7 @@ export { PAR_RING_COLOR } from '../types/par'
  * Priority overrides the PAR-status color so priority dots stand out on the map.
  */
 export function getMarkerColor(customer: Customer): string {
-  return PAR_COLORS[customer.parStatus]
+  return PAR_COLORS[customer.par_status]
 }
 
 // ─── Marker Radius ────────────────────────────────────────────────────────────
@@ -27,7 +27,7 @@ const RADIUS_MAP: Record<string, number> = {
  * Priority customers render larger so they are immediately visible on the map.
  */
 export function getMarkerRadius(customer: Customer): number {
-  return RADIUS_MAP[customer.parStatus] ?? 5
+  return RADIUS_MAP[customer.par_status] ?? 5
 }
 
 // ─── Movement Label ───────────────────────────────────────────────────────────
