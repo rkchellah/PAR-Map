@@ -1,86 +1,163 @@
-Here is the final, comprehensive README.md for your project, incorporating the Luminous Curator design system, the Supabase architecture, and the specific operational requirements for your field teams in Lusaka.
+# 🌍 PAR Map — Interactive Geospatial Dashboard
 
-🌍 Interactive Map
-High-Performance Geospatial Dashboard & Portfolio Analytics
-An advanced mapping platform built with Next.js 15 and Supabase, designed for real-time visualization of loan portfolio status and geographic territory management. This tool enables field teams to navigate complex urban environments like Lusaka while providing administrators with a powerful dashboard for risk analysis and layer management.
+> High-performance loan portfolio visualization and territory management for field teams in Lusaka, Zambia.
 
-🎨 Design Philosophy: Luminous Curator
-The application utilizes a professional, high-contrast light-mode theme designed for maximum visibility in the field:
+Built with **Next.js 15** and **Supabase** — designed for real-time PAR status tracking, boundary layer management, and field-ready geographic intelligence.
 
-Clarity: Tonal sidebars and glassmorphism navbars ensure essential metrics are scannable even in high-glare environments.
+---
 
-Typography: A refined mix of Manrope for the map interface, Inter for administrative tasks, and DM Mono for precise technical data.
+## 🎨 Design System: Luminous Curator
 
-Visual Status: Customer markers are color-coded by PAR status, with "Priority Visit" flags featuring a distinct red dot and yellow ring for immediate attention.
+A professional, high-contrast light-mode theme built for field visibility:
 
-🚀 Key Features
-Real-Time Portfolio Tracking: Monitor Total Portfolio, On-Time, and At-Risk (PAR) metrics across regional areas like Chilenje, Matero, and Kanyama.
+| Principle | Implementation |
+|-----------|---------------|
+| **Clarity** | Tonal sidebars and glassmorphic navbar — metrics scannable in high-glare environments |
+| **Typography** | `Manrope` for map UI · `Inter` for admin tasks · `DM Mono` for technical data |
+| **Status Encoding** | Color-coded markers by PAR bucket · Priority Visit flags with red dot + yellow ring |
 
-Advanced Layer Management: Upload, rename, and recolor KMZ/KML/GeoJSON boundary layers.
+---
 
-Buffer Circle Generator: Create geodesic polygons (e.g., 1km/2km warehouse buffers) from CSV coordinates.
+## 🚀 Features
 
-Role-Based Access: Secure /admin dashboard protected by Supabase Auth and Edge Middleware.
+- **Real-Time Portfolio Tracking** — Monitor On-Time and At-Risk (PAR 1-30 through PAR 90+) metrics across areas including Chilenje, Matero, Ngombe, Kanyama, and more
+- **Advanced Layer Management** — Upload, rename, recolor, and lock KMZ / KML / GeoJSON boundary layers
+- **Buffer Circle Generator** — Create geodesic polygons (e.g. 1 km / 2 km warehouse buffers) from CSV coordinates
+- **Team Grouping** — Assign boundary layers to area circle field teams
+- **Role-Based Access** — `/admin` dashboard protected by Supabase Auth + middleware route guards
+- **High Performance** — Canvas renderer (`preferCanvas: true`) handles thousands of markers smoothly on mobile and desktop
 
-High Performance: Optimized with ssr: false for Leaflet and preferCanvas: true to handle thousands of data points smoothly on mobile.
+---
 
-🛠 Technical Stack
-Layer	Technology
-Framework	Next.js 15 (App/Pages Router)
-Database/Auth	Supabase
-Mapping	Mapbox + Leaflet
-Parsing	JSZip (KMZ), PapaParse (CSV), DOMParser (KML)
-Styling	Tailwind CSS + Luminous Tokens
-📂 Project Architecture
-Plaintext
+## 🛠 Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Framework | Next.js 15 (Pages Router) |
+| Database & Auth | Supabase (PostgreSQL + RLS) |
+| Mapping | Mapbox GL + Leaflet + React-Leaflet v5 |
+| File Parsing | JSZip (KMZ) · PapaParse (CSV) · DOMParser (KML) |
+| Styling | Tailwind CSS + Luminous Design Tokens |
+| Deployment | Vercel |
+
+---
+
+## 📂 Project Structure
+
+```
 src/
-├── components/         
-│   ├── Map.tsx         # Dynamic Leaflet implementation (No-SSR)
-│   └── NavIcons.tsx    # Custom Luminous UI elements
-├── data/
-│   └── customers.ts    # Weekly PAR data (Updated via Admin)
+├── components/
+│   ├── Map.tsx              # Dynamic Leaflet map (SSR disabled, canvas renderer)
+│   └── NavIcons.tsx         # Luminous UI icon components
 ├── lib/
-│   ├── supabase.ts     # Client & lazy Admin client
-│   ├── useAuth.ts      # Auth hook with race-condition fix
-│   └── layerService.ts # KMZ persistence & visibility logic
+│   ├── supabase.ts          # Browser client + server admin client
+│   ├── useAuth.ts           # Auth hook with profile fetch + race condition fix
+│   ├── layerService.ts      # KMZ layer persistence and visibility logic
+│   └── customerService.ts   # Paginated customer fetch + DB sync
+├── pages/
+│   ├── index.tsx            # Main map page
+│   ├── admin.tsx            # Admin dashboard (auth-guarded)
+│   ├── login.tsx            # Email auth
+│   └── auth/callback.tsx    # OAuth PKCE exchange handler
 ├── utils/
-│   └── kmzParser.ts    # Client-side file conversion
-└── middleware.ts       # Edge-based session cookie protection
-📋 Environment Variables
-Create a .env.local file with the following keys:
+│   └── kmzParser.ts         # Client-side KMZ/KML/GeoJSON conversion
+├── types/
+│   └── par.ts               # Customer interface, PAR colors, stats helpers
+└── middleware.ts             # Edge middleware — session cookie + route protection
+```
 
-Code snippet
+---
+
+## ⚙️ Environment Variables
+
+Create a `.env.local` file in the project root:
+
+```env
 NEXT_PUBLIC_MAPBOX_TOKEN=pk.eyJ1...
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbG...
-SUPABASE_SERVICE_ROLE_KEY=eyJhbG... # Server-only
-🏗 Setup & Deployment
-Install: npm install
+SUPABASE_SERVICE_ROLE_KEY=eyJhbG...        # Server-only — never expose to browser
+```
 
-Database: Execute the SQL migrations in Supabase to create profiles, kmz_layers, and teams tables.
+---
 
-Storage: Create a public storage bucket named kmz-files in your Supabase dashboard.
+## 🏗 Setup & Deployment
 
-Admin Access: Promote a user to admin via the Supabase SQL editor:
+### 1. Install dependencies
+```bash
+npm install
+```
 
-SQL
-UPDATE profiles SET role = 'admin' WHERE id = 'user-uuid-here';
-Deploy: Connect your repository to Vercel and add the environment variables listed above.
+### 2. Run database migrations
 
-📈 Weekly Data Update Workflow
-To update the customer data displayed on the map:
+Execute the following in your **Supabase SQL Editor** (in order):
 
-Export the latest PAR CSV from your loan management system.
+```sql
+-- 1. User profiles + role system
+CREATE TABLE profiles ( ... );
 
-Use the Admin Portal to upload the CSV, which generates the updated customers.ts.
+-- 2. KMZ boundary layers
+CREATE TABLE kmz_layers ( ... );
 
-The map will automatically refresh to reflect the new regional Risk % and priority visit flags.
+-- 3. Customer PAR data
+CREATE TABLE customers ( ... );
 
-🛡 Credits & Author
-Author: Chella Kamina
+-- 4. Teams
+CREATE TABLE teams ( ... );
+```
 
-Project: Interactive Map (PAR Map)
+> Full migration scripts are in `/supabase/migrations/`.
 
-System: Luminous Curator UI
+### 3. Create storage bucket
 
-Optimized for ECS Fintech Lusaka field operations.
+In your Supabase dashboard → **Storage** → create a public bucket named `kmz-files`.
+
+### 4. Promote a user to admin
+
+```sql
+UPDATE profiles SET role = 'admin' WHERE id = 'your-user-uuid-here';
+```
+
+### 5. Deploy to Vercel
+
+Connect your repository to Vercel and add all four environment variables from `.env.local` to your project settings. Pushes to `main` deploy automatically.
+
+---
+
+## 📈 Weekly Data Update Workflow
+
+1. Export the latest PAR CSV from your loan management system (PayGops / internal export)
+2. Log in to the **Admin Portal** → Customer Data
+3. Drop the CSV into the upload zone and click **Sync to Database**
+4. The map reloads automatically — new markers, updated PAR buckets, and refreshed portfolio stats
+
+---
+
+## 🗺 PAR Status Color Reference
+
+| Status | Color | Meaning |
+|--------|-------|---------|
+| ONTIME | 🟢 Green | Current — no arrears |
+| PAR 1-30 | 🟡 Yellow-Green | 1–30 days past due |
+| PAR 31-60 | 🟠 Amber | 31–60 days past due |
+| PAR 61-90 | 🔴 Orange-Red | 61–90 days past due |
+| PAR 90+ | 🔴 Deep Red | 90+ days past due — critical |
+
+---
+
+## 🛡 Security
+
+- Row Level Security (RLS) enabled on all tables
+- Authenticated users can read customer and layer data
+- Only `role = 'admin'` profiles can write, delete, or manage data
+- Service role key is never exposed to the browser
+- Middleware guards the `/admin` route server-side
+
+---
+
+## 👤 Author
+
+**Chella Kamina** — Data Analyst, ECS Fintech (SupaMoto)  
+GitHub: [@rkchellah](https://github.com/rkchellah) · LinkedIn: [rkchellah](https://linkedin.com/in/rkchellah)
+
+*Optimized for ECS Fintech Lusaka field operations.*
