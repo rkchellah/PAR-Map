@@ -1,4 +1,4 @@
-# 🌍 PAR Map - Interactive Geospatial Dashboard
+# PAR Map - Interactive Geospatial Dashboard
 
 > High-performance loan portfolio visualisation and territory management for field teams in Lusaka, Zambia.
 
@@ -6,7 +6,7 @@ Built with **Next.js 15** and **Supabase** — designed for real-time PAR status
 
 ---
 
-## 🎨 Design System: Luminous Curator
+## Design System: Luminous Curator
 
 A professional, high-contrast light-mode theme built for field visibility:
 
@@ -18,18 +18,18 @@ A professional, high-contrast light-mode theme built for field visibility:
 
 ---
 
-## 🚀 Features
+## Features
 
-- **Real-Time Portfolio Tracking** — Monitor On-Time and At-Risk (PAR 1-30 through PAR 90+) metrics across areas including Chilenje, Matero, Ngombe, Kanyama, and more
-- **Advanced Layer Management** — Upload, rename, recolor, and lock KMZ / KML / GeoJSON boundary layers
-- **Buffer Circle Generator** — Create geodesic polygons (e.g. 1 km / 2 km warehouse buffers) from CSV coordinates
-- **Team Grouping** — Assign boundary layers to area circle field teams
-- **Role-Based Access** — `/admin` dashboard protected by Supabase Auth + middleware route guards
-- **High Performance** — Canvas renderer (`preferCanvas: true`) handles thousands of markers smoothly on mobile and desktop
+- **Real-Time Portfolio Tracking** - Monitor On-Time and At-Risk (PAR 1-30 through PAR 90+) metrics across areas including Chilenje, Matero, Ngombe, Kanyama, and more
+- **Advanced Layer Management** - Upload, rename, recolor, and lock KMZ / KML / GeoJSON boundary layers
+- **Buffer Circle Generator** - Create geodesic polygons (e.g. 1 km / 2 km warehouse buffers) from CSV coordinates
+- **Team Grouping** - Assign boundary layers to area circle field teams
+- **Role-Based Access** - `/admin` dashboard protected by Supabase Auth + middleware route guards
+- **High Performance** - Canvas renderer (`preferCanvas: true`) handles thousands of markers smoothly on mobile and desktop
 
 ---
 
-## 🛠 Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
@@ -42,7 +42,7 @@ A professional, high-contrast light-mode theme built for field visibility:
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 src/
@@ -68,7 +68,7 @@ src/
 
 ---
 
-## ⚙️ Environment Variables
+## Environment Variables
 
 Create a `.env.local` file in the project root:
 
@@ -81,7 +81,7 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbG...        # Server-only — never expose to bro
 
 ---
 
-## 🏗 Setup & Deployment
+## Setup & Deployment
 
 ### 1. Install dependencies
 ```bash
@@ -108,7 +108,7 @@ CREATE TABLE teams ( ... );
 
 > Full migration scripts are in `/supabase/migrations/`.
 
-### 3. Create storage bucket
+### 3. Create a storage bucket
 
 In your Supabase dashboard → **Storage** → create a public bucket named `kmz-files`.
 
@@ -124,7 +124,7 @@ Connect your repository to Vercel and add all four environment variables from `.
 
 ---
 
-## 📈 Weekly Data Update Workflow
+## Weekly Data Update Workflow
 
 1. Export the latest PAR CSV from your loan management system (PayGops / internal export)
 2. Log in to the **Admin Portal** → Customer Data
@@ -133,7 +133,7 @@ Connect your repository to Vercel and add all four environment variables from `.
 
 ---
 
-## 🗺 PAR Status Color Reference
+## PAR Status Colour Reference
 
 | Status | Color | Meaning |
 |--------|-------|---------|
@@ -145,7 +145,7 @@ Connect your repository to Vercel and add all four environment variables from `.
 
 ---
 
-## 🛡 Security
+## Security
 
 - Row Level Security (RLS) enabled on all tables
 - Authenticated users can read customer and layer data
@@ -155,7 +155,7 @@ Connect your repository to Vercel and add all four environment variables from `.
 
 ---
 
-## 👤 Author
+## Author
 
 **Chella Kamina** — Data Analyst, ECS Fintech (SupaMoto)  
 GitHub: [@rkchellah](https://github.com/rkchellah) · LinkedIn: [rkchellah](https://linkedin.com/in/rkchellah)
