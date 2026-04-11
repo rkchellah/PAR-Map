@@ -1,6 +1,6 @@
-# 🌍 PAR Map — Interactive Geospatial Dashboard
+# 🌍 PAR Map - Interactive Geospatial Dashboard
 
-> High-performance loan portfolio visualization and territory management for field teams in Lusaka, Zambia.
+> High-performance loan portfolio visualisation and territory management for field teams in Lusaka, Zambia.
 
 Built with **Next.js 15** and **Supabase** — designed for real-time PAR status tracking, boundary layer management, and field-ready geographic intelligence.
 
