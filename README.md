@@ -157,7 +157,4 @@ Connect your repository to Vercel and add all four environment variables from `.
 
 ## Author
 
-**Chella Kamina** — Data Analyst, ECS Fintech (SupaMoto)  
-GitHub: [@rkchellah](https://github.com/rkchellah) · LinkedIn: [rkchellah](https://linkedin.com/in/rkchellah)
-
-*Optimized for ECS Fintech Lusaka field operations.*
+**Chella Kamina**
