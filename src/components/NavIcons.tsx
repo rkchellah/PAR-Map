@@ -3,9 +3,8 @@
 // Use these custom SVGs that are not Lucide-generic.
 
 import React from 'react'
-import { 
-  IconLogoMark, 
-  IconSignIn, 
+import {
+  IconLogoMark,
   IconUser,
   IconSearch as IconSearchBase, 
   IconClose,

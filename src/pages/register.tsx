@@ -65,8 +65,8 @@ export default function RegisterPage() {
       })
       if (signUpErr) throw signUpErr
       setSuccess(true)
-    } catch (err: any) {
-      setError(err.message ?? 'Registration failed. Please try again.')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Registration failed. Please try again.')
     } finally {
       setLoading(false)
     }

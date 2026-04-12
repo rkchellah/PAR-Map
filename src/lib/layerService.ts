@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { parseKmz, parseKml } from '../utils/kmzParser'
+import type { GeoJSONFeatureCollection } from '../utils/kmzParser'
 import type { KMZLayer } from '../types/par'
 
 export interface StoredLayer {
@@ -26,7 +27,7 @@ export async function fetchLayers(): Promise<KMZLayer[]> {
       const { data: fileData, error: downloadError } = await supabase.storage.from('kmz-files').download(row.file_path)
       if (downloadError || !fileData) { console.error(`Error downloading file for ${row.name}:`, downloadError); continue }
 
-      let geojson: any
+      let geojson: GeoJSONFeatureCollection
       const fp = row.file_path.toLowerCase()
       if (fp.endsWith('.geojson') || fp.endsWith('.json')) {
         geojson = JSON.parse(await fileData.text())
@@ -81,7 +82,8 @@ export async function fetchBufferLayers(): Promise<KMZLayer[]> {
 
   if (error || !data) { console.error('Error fetching buffer layers:', error); return [] }
 
-  return data.map((row: any) => ({
+  interface BufferRow extends StoredLayer { geojson: GeoJSONFeatureCollection }
+  return (data as BufferRow[]).map(row => ({
     id: row.id,
     name: row.name,
     color: row.color,

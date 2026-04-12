@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Popup, GeoJSON, ZoomControl, useMap, Pane, Marker } from 'react-leaflet'
+import type { GeoJsonObject } from 'geojson'
 
 import { Customer, KMZLayer } from '../types/par'
+import type { GeoJSONFeature } from '../utils/kmzParser'
 import { PopupCard } from './PopupCard'
-import {
-  getMarkerColor,
-  getMarkerRadius,
-} from '../utils/parHelpers'
+import { getMarkerColor, getMarkerRadius } from '../utils/parHelpers'
 import L from 'leaflet'
 import type { CircleMarker as LeafletCircleMarker } from 'leaflet'
 
@@ -70,9 +69,7 @@ function FlyToController({ customer }: { customer: Customer | null | undefined }
   useEffect(() => {
     if (!customer) return
     map.flyTo([customer.latitude, customer.longitude], 17, { duration: 0.8 })
-    const timer = setTimeout(() => {
-      markerRef.current?.openPopup()
-    }, 850)
+    const timer = setTimeout(() => { markerRef.current?.openPopup() }, 850)
     return () => clearTimeout(timer)
   }, [customer, map])
 
@@ -87,9 +84,7 @@ function FlyToController({ customer }: { customer: Customer | null | undefined }
       pathOptions={{ color: '#111111', fillColor: color, fillOpacity: 1, weight: 2 }}
       renderer={renderer}
     >
-      <Popup className="par-popup">
-        <PopupCard customer={customer} />
-      </Popup>
+      <Popup className="par-popup"><PopupCard customer={customer} /></Popup>
     </CircleMarker>
   )
 }
@@ -97,15 +92,16 @@ function FlyToController({ customer }: { customer: Customer | null | undefined }
 const LUSAKA_CENTER: [number, number] = [-15.4166, 28.2833]
 const DEFAULT_ZOOM = 13
 
-export default function Map({ customers, kmzLayers, onKMZDrop, mapStyle, focusedCustomer, onZoomChange, showBoundaries = true, showBufferPins = true }: MapProps) {
-  const handleDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault()
-      const file = e.dataTransfer.files[0]
-      if (file) onKMZDrop(file)
-    },
-    [onKMZDrop]
-  )
+export default function Map({
+  customers, kmzLayers, onKMZDrop, mapStyle,
+  focusedCustomer, onZoomChange,
+  showBoundaries = true, showBufferPins = true,
+}: MapProps) {
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files[0]
+    if (file) onKMZDrop(file)
+  }, [onKMZDrop])
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -120,29 +116,18 @@ export default function Map({ customers, kmzLayers, onKMZDrop, mapStyle, focused
           key={customer.contract_ref || i}
           center={[customer.latitude, customer.longitude]}
           radius={radius + 2}
-          pathOptions={{
-            color: '#000000',
-            fillColor: color,
-            fillOpacity: 1,
-            weight: 1,
-          }}
+          pathOptions={{ color: '#000000', fillColor: color, fillOpacity: 1, weight: 1 }}
           bubblingMouseEvents={false}
           renderer={renderer}
         >
-          <Popup className="par-popup">
-            <PopupCard customer={customer} />
-          </Popup>
+          <Popup className="par-popup"><PopupCard customer={customer} /></Popup>
         </CircleMarker>
       )
     })
   }, [customers])
 
   return (
-    <div
-      style={{ height: '100%', width: '100%' }}
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
-    >
+    <div style={{ height: '100%', width: '100%' }} onDrop={handleDrop} onDragOver={handleDragOver}>
       <MapContainer
         center={LUSAKA_CENTER}
         zoom={DEFAULT_ZOOM}
@@ -157,61 +142,70 @@ export default function Map({ customers, kmzLayers, onKMZDrop, mapStyle, focused
           attribution="© Mapbox © OpenStreetMap"
         />
 
+        {/*
+          GeoJSON layers live in overlayPane (z-index 400).
+          Customer markers live in customerPane (z-index 450).
+          Because 450 > 400, the canvas element for customers is always on top,
+          so customer clicks are never blocked by polygon layers —
+          while tooltips on polygons still work when hovering empty space.
+        */}
         {showBoundaries && kmzLayers
-          .filter((layer) => layer.visible)
-          .map((layer) => {
-            // FIX: use isBuffer flag set by fetchBufferLayers() — not name prefix
-            const isBuffer = !!layer.isBuffer
-            return (
-              <GeoJSON
-                key={layer.id}
-                data={layer.geojson as unknown as any}
-                interactive={true}
-                style={() => ({
-                  color: layer.color,
-                  weight: 2,
-                  fillColor: layer.color,
-                  fillOpacity: 0.08,
-                })}
-                onEachFeature={(feature, leafletLayer) => {
-                  // Buffers: show per-feature name from GeoJSON properties
-                  // Boundaries: show the admin-given layer name
-                  const label = isBuffer
-                    ? (feature.properties?.name ?? '')
-                    : layer.name
-                  if (label) {
-                    leafletLayer.bindTooltip(label, {
-                      sticky: true,
-                      direction: 'top',
-                      offset: [0, -6],
-                      className: 'par-tooltip',
-                    })
-                  }
-                }}
-              />
-            )
-          })}
+          .filter(layer => layer.visible)
+          .map(layer => (
+            <GeoJSON
+              key={layer.id}
+              data={layer.geojson as unknown as GeoJsonObject}
+              interactive={true}
+              style={() => ({
+                color: layer.color,
+                weight: 2,
+                fillColor: layer.color,
+                fillOpacity: 0.08,
+              })}
+              onEachFeature={(feature, leafletLayer) => {
+                // Boundaries: show admin-renamed layer name
+                // Buffers: show per-feature name from CSV properties
+                const label = layer.isBuffer
+                  ? (feature.properties?.name ?? '')
+                  : layer.name
+                if (label) {
+                  leafletLayer.bindTooltip(label, {
+                    sticky: true,
+                    direction: 'top',
+                    offset: [0, -6],
+                    className: 'par-tooltip',
+                  })
+                }
+              }}
+            />
+          ))}
 
+        {/* Buffer center pins */}
         {showBufferPins && kmzLayers
           .filter(layer => layer.visible && layer.isBuffer && layer.geojson)
           .flatMap(layer =>
-            (layer.geojson as any).features?.map((feature: any, i: number) => {
+            (layer.geojson.features ?? []).map((feature: GeoJSONFeature, i: number) => {
               const coords = feature.geometry?.coordinates?.[0] as [number, number][]
               if (!coords?.length) return null
               const center = polygonCentroid(coords)
-              const name = feature.properties?.name ?? ''
+              const name = (feature.properties?.name as string | undefined) ?? ''
               return (
-                <Marker
-                  key={`pin-${layer.id}-${i}`}
-                  position={center}
-                  icon={pinIcon}
-                >
-                  {name && <Popup className="par-popup"><div style={{ padding: '12px 16px', fontFamily: 'Inter,system-ui,sans-serif', fontSize: 13, fontWeight: 600 }}>{name}</div></Popup>}
+                <Marker key={`pin-${layer.id}-${i}`} position={center} icon={pinIcon}>
+                  {name && (
+                    <Popup className="par-popup">
+                      <div style={{ padding: '12px 16px', fontFamily: 'Inter,system-ui,sans-serif', fontSize: 13, fontWeight: 600 }}>{name}</div>
+                    </Popup>
+                  )}
                 </Marker>
               )
             }).filter(Boolean)
           )}
 
+        {/*
+          customerPane at z-index 450 sits above overlayPane (400).
+          The canvas element capturing customer clicks is therefore always
+          rendered on top of GeoJSON SVG — customers are always clickable.
+        */}
         <Pane name="customerPane" style={{ zIndex: 450 }}>
           {customerMarkers}
         </Pane>

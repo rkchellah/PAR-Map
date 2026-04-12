@@ -71,7 +71,7 @@ export default function OnboardingGuide() {
         <div style={{ padding: '22px 28px 18px', borderBottom: `1.5px solid ${T.border}`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontSize: 17, fontWeight: 800, color: T.ink, letterSpacing: '-0.02em' }}>Welcome to PAR Map Admin</div>
-            <div style={{ fontSize: 12.5, color: T.muted, marginTop: 4 }}>Here's how to set everything up in 5 steps</div>
+            <div style={{ fontSize: 12.5, color: T.muted, marginTop: 4 }}>Here&apos;s how to set everything up in 5 steps</div>
           </div>
           <button onClick={dismiss} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.muted, fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4 }}
             onMouseEnter={e => e.currentTarget.style.color = T.ink} onMouseLeave={e => e.currentTarget.style.color = T.muted}>×</button>

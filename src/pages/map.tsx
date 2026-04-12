@@ -9,7 +9,7 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import Head from 'next/head'
 
-import { KMZLayer, PAR_COLORS, computeStats } from '../types/par'
+import { Customer, KMZLayer, PAR_COLORS, computeStats } from '../types/par'
 import { parseKmz } from '../utils/kmzParser'
 import { fetchLayers, fetchBufferLayers, toggleLayerVisibility } from '../lib/layerService'
 import { getCustomers } from '../lib/customerService'
@@ -94,13 +94,11 @@ export default function MapPage() {
   const [hovered, setHovered] = useState(false)
   const [teams, setTeams]   = useState<{ id: string; name: string; color: string; layerIds: string[] }[]>([])
   const hoverRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [customers, setCustomers]   = useState<any[]>([])
-  const [weekLabel, setWeekLabel]   = useState('')
+  const [customers, setCustomers]   = useState<Customer[]>([])
 
   useEffect(() => {
     getCustomers().then(data => {
       setCustomers(data)
-      if (data[0]?.week_label) setWeekLabel(data[0].week_label)
     }).catch(console.error)
   }, [])
 
@@ -114,22 +112,22 @@ export default function MapPage() {
       const savedBufPins    = localStorage.getItem('par-map:bufferPins')
       if (savedParFilter  !== null) setParFilter(savedParFilter)
       if (savedMapStyle   !== null) setMapStyle(savedMapStyle)
-      if (savedSection    !== null) setSection((savedSection as any) || 'portfolio')
+      if (savedSection    !== null) setSection((savedSection as 'portfolio' | 'filters' | 'layers' | 'teams' | 'theme') || 'portfolio')
       if (savedBoundaries !== null) setShowBoundaries(savedBoundaries === 'true')
       if (savedBufPins    !== null) setShowBufferPins(savedBufPins === 'true')
     } catch {}
   }, [])
 
-  const filteredCustomers = useMemo<any[]>(() => {
+  const filteredCustomers = useMemo<Customer[]>(() => {
     const q = search.toLowerCase()
     let r = customers
-    if (q) r = r.filter((c: any) =>
+    if (q) r = r.filter(c =>
       (c.contract_ref ?? '').toLowerCase().includes(q) ||
       (c.name ?? '').toLowerCase().includes(q) ||
       (c.phone ?? '').toLowerCase().includes(q) ||
       (c.phone2 ?? '').toLowerCase().includes(q))
-    if (parFilter) r = r.filter((c: any) => c.par_status === parFilter)
-    return r.filter((c: any) => c.latitude >= -90 && c.latitude <= 90 && c.longitude >= -180 && c.longitude <= 180 && !(c.latitude === 0 && c.longitude === 0))
+    if (parFilter) r = r.filter(c => c.par_status === parFilter)
+    return r.filter(c => c.latitude >= -90 && c.latitude <= 90 && c.longitude >= -180 && c.longitude <= 180 && !(c.latitude === 0 && c.longitude === 0))
   }, [customers, search, parFilter])
 
   const stats   = useMemo(() => computeStats(filteredCustomers), [filteredCustomers])
@@ -152,7 +150,7 @@ export default function MapPage() {
         }
         setKmzLayers([...sb, ...buffers, ...local])
         const { data: teamsData } = await supabase.from('teams').select('*')
-        setTeams((teamsData ?? []).map((t: any) => ({ id: t.id, name: t.name, color: t.color, layerIds: t.layer_ids ?? [] })))
+        setTeams((teamsData ?? [] as Array<{ id: string; name: string; color: string; layer_ids?: string[] }>).map(t => ({ id: t.id, name: t.name, color: t.color, layerIds: t.layer_ids ?? [] })))
       } catch (e) { console.error(e) } finally { setLayersLoading(false) }
     })()
   }, [])
@@ -199,9 +197,6 @@ export default function MapPage() {
     <>
       <Head>
         <title>Supamoto Map</title>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
         <style>{`
           *{box-sizing:border-box;margin:0;padding:0;}
           body{overflow:hidden;background:${T.canvas};font-family:'Manrope',sans-serif;-webkit-font-smoothing:antialiased;}

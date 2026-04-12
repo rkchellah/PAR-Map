@@ -59,14 +59,14 @@ export default function AuthCallback() {
         } else {
           router.replace(next)
         }
-      } catch (e: any) {
-        console.error('OAuth exchange failed:', e.message)
+      } catch (e: unknown) {
+        console.error('OAuth exchange failed:', e instanceof Error ? e.message : e)
         router.replace('/login?error=oauth_failed')
       }
     }
 
     exchange()
-  }, [router.isReady, router.query])
+  }, [router])
 
   return (
     <div style={{

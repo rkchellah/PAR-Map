@@ -11,7 +11,7 @@ import {
 import { useAuth } from '../lib/useAuth'
 import { syncCustomers, getCustomers } from '../lib/customerService'
 import { supabase } from '../lib/supabase'
-import { isPriorityVisit, PAR_COLORS } from '../types/par'
+import { Customer, isPriorityVisit, PAR_COLORS } from '../types/par'
 import type { KMZLayer } from '../types/par'
 import Papa from 'papaparse'
 import OnboardingGuide from '../components/OnboardingGuide'
@@ -293,13 +293,11 @@ function AdminContent({ signOut }: { signOut: () => void }) {
   const [parCsv, setParCsv]               = useState<File | null>(null)
   const [parStatus, setParStatus]         = useState<Status>({ type: 'idle', msg: '' })
   const [prev3, setPrev3]                 = useState<Record<string, string>[]>([])
-  const [liveCustomers, setLiveCustomers] = useState<any[]>([])
-  const [liveWeekLabel, setLiveWeekLabel] = useState('')
+  const [liveCustomers, setLiveCustomers] = useState<Customer[]>([])
 
   useEffect(() => {
     getCustomers().then(data => {
       setLiveCustomers(data)
-      if (data[0]?.week_label) setLiveWeekLabel(data[0].week_label)
     }).catch(() => {})
   }, [])
 
@@ -310,7 +308,7 @@ function AdminContent({ signOut }: { signOut: () => void }) {
     ])
     setLayers(fetchedLayers)
     setBufferLayers(fetchedBuffers)
-    setTeams((teamsResult.data ?? []).map((r: any) => ({ id: r.id, name: r.name, color: r.color, layerIds: r.layer_ids ?? [] })))
+    setTeams((teamsResult.data ?? [] as Array<{ id: string; name: string; color: string; layer_ids?: string[] }>).map(r => ({ id: r.id, name: r.name, color: r.color, layerIds: r.layer_ids ?? [] })))
     setLayersLoading(false)
   }, [])
 
@@ -413,7 +411,7 @@ function AdminContent({ signOut }: { signOut: () => void }) {
     if (!parCsv) return
     setParStatus({ type: 'loading', msg: 'Syncing to database...' })
     Papa.parse(parCsv, { header: true, skipEmptyLines: true, complete: async (res) => {
-      const rows: any[] = []; let skipped = 0
+      const rows: Record<string, unknown>[] = []; let skipped = 0
       const formatPhone = (val: string) => {
         if (!val) return ''
         const trimmed = val.trim()
@@ -422,17 +420,17 @@ function AdminContent({ signOut }: { signOut: () => void }) {
       }
       for (const row of res.data as Record<string, string>[]) {
         const r: Record<string, string> = {}
-        Object.keys(row).forEach(k => { r[k.toLowerCase().trim()] = (row as any)[k] })
+        Object.keys(row).forEach(k => { r[k.toLowerCase().trim()] = row[k] })
         const lat = parseFloat(r['latitude']), lon = parseFloat(r['longitude'])
         if (!r['latitude'] || !r['longitude'] || isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || Math.abs(lat) > 90 || Math.abs(lon) > 180) { skipped++; continue }
         rows.push({ contract_ref: r['contract reference'] || r['code'] || '', name: r['name'] ?? '', phone: formatPhone(r['phone'] ?? ''), phone2: formatPhone(r['phone 2'] ?? ''), area: r['area'] ?? '', par_status: r['par status'] ?? '', lead_generate: r['lead generate'] ?? '', lead_generate_name: r['lead generator name'] ?? '', latitude: lat, longitude: lon })
       }
       try {
-        await syncCustomers(rows, '')
+        await syncCustomers(rows)
         setParStatus({ type: 'ok', msg: `${rows.length} records synced. ${skipped} skipped.` })
         setParCsv(null); setPrev3([])
-        getCustomers().then(data => { setLiveCustomers(data); if (data[0]?.week_label) setLiveWeekLabel(data[0].week_label) }).catch(() => {})
-      } catch (e: any) { setParStatus({ type: 'err', msg: e.message || 'Sync failed' }) }
+        getCustomers().then(data => { setLiveCustomers(data) }).catch(() => {})
+      } catch (e: unknown) { setParStatus({ type: 'err', msg: e instanceof Error ? e.message : 'Sync failed' }) }
     }, error: () => setParStatus({ type: 'err', msg: 'Failed to parse CSV' }) })
   }
 
@@ -457,7 +455,7 @@ function AdminContent({ signOut }: { signOut: () => void }) {
         await uploadBufferLayer(new File([blob], `buffers_${Date.now()}.geojson`), `${csvFile.name.replace(/\.csv$/i, '')} (${radius}${unit})`, bufColor, bufLocked)
         setBufStatus({ type: 'ok', msg: `${features.length} buffers uploaded` })
         setCsvFile(null); setPrev2([]); loadLayers()
-      } catch (e: any) { setBufStatus({ type: 'err', msg: e.message ?? 'Failed' }) }
+      } catch (e: unknown) { setBufStatus({ type: 'err', msg: e instanceof Error ? e.message : 'Failed' }) }
     }, error: () => setBufStatus({ type: 'err', msg: 'CSV parse error' }) })
   }
 
@@ -478,9 +476,6 @@ function AdminContent({ signOut }: { signOut: () => void }) {
     <>
       <Head>
         <title>Admin — PAR Map</title>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
         <style>{`
           *{box-sizing:border-box;margin:0;padding:0;}
           body{font-family:'Inter',system-ui,sans-serif;background:${T.canvas};color:${T.ink};-webkit-font-smoothing:antialiased;}
@@ -593,13 +588,13 @@ function AdminContent({ signOut }: { signOut: () => void }) {
                           setParStatus({ type: 'loading', msg: 'Deleting...' })
                           const { error } = await supabase.from('customers').delete().neq('id', '00000000-0000-0000-0000-000000000000')
                           if (error) setParStatus({ type: 'err', msg: error.message })
-                          else { setParStatus({ type: 'ok', msg: 'All customer data deleted.' }); setLiveCustomers([]); setLiveWeekLabel('') }
+                          else { setParStatus({ type: 'ok', msg: 'All customer data deleted.' }); setLiveCustomers([]) }
                         }}><IconTrash size={13} /> Clear all customer data</Btn>
                       </div>
                     </div>
                   </Card>
                   <div style={{ background: T.card, borderRadius: '16px 16px 10px 10px', border: `1.5px solid ${T.border}`, overflow: 'hidden' }}>
-                    <CardHeader title="Customers" sub={liveWeekLabel} right={<span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: T.low, color: T.mid, fontFamily: 'DM Mono' }}>{liveCustomers.length.toLocaleString()}</span>} />
+                    <CardHeader title="Customers" right={<span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: T.low, color: T.mid, fontFamily: 'DM Mono' }}>{liveCustomers.length.toLocaleString()}</span>} />
                     <div style={{ maxHeight: 460, overflowY: 'auto' }}>
                       {liveCustomers.map((c, i) => (
                         <div key={c.contract_ref || i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 20px', borderBottom: `1px solid ${T.border}`, transition: 'background 0.1s' }}

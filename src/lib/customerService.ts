@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
+import type { Customer } from '../types/par'
 
-export async function syncCustomers(rows: any[], weekLabel: string) {
+export async function syncCustomers(rows: Record<string, unknown>[]) {
   const { error: deleteError } = await supabase
     .from('customers')
     .delete()
@@ -17,9 +18,9 @@ export async function syncCustomers(rows: any[], weekLabel: string) {
   return { success: true }
 }
 
-export async function getCustomers() {
+export async function getCustomers(): Promise<Customer[]> {
   const PAGE = 1000
-  const all: any[] = []
+  const all: Customer[] = []
   let from = 0
 
   while (true) {
