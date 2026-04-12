@@ -1,3 +1,4 @@
+import 'leaflet/dist/leaflet.css'
 import React, { useCallback, useEffect, useRef } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Popup, GeoJSON, ZoomControl, useMap, Pane, Marker } from 'react-leaflet'
 import type { GeoJsonObject } from 'geojson'

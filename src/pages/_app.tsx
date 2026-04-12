@@ -1,6 +1,5 @@
 import type { AppProps } from 'next/app'
 import Head from 'next/head'
-import 'leaflet/dist/leaflet.css'
 
 import '../styles/globals.css'
 
