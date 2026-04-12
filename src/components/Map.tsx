@@ -1,18 +1,16 @@
 import React, { useCallback, useEffect, useRef } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Popup, GeoJSON, ZoomControl, useMap, Pane } from 'react-leaflet'
-import MarkerClusterGroup from 'react-leaflet-cluster'
-import 'react-leaflet-cluster/dist/assets/MarkerCluster.css'
-import 'react-leaflet-cluster/dist/assets/MarkerCluster.Default.css'
+import { MapContainer, TileLayer, CircleMarker, Popup, GeoJSON, ZoomControl, useMap, Pane, Marker } from 'react-leaflet'
+
 import { Customer, KMZLayer } from '../types/par'
 import { PopupCard } from './PopupCard'
 import {
   getMarkerColor,
   getMarkerRadius,
 } from '../utils/parHelpers'
+import L from 'leaflet'
 import type { CircleMarker as LeafletCircleMarker } from 'leaflet'
 
-// This component must only ever be imported via dynamic() with ssr:false
-// because Leaflet accesses window at module load time.
+const renderer = L.canvas({ padding: 0.5 })
 
 interface MapProps {
   customers: Customer[]
@@ -22,7 +20,24 @@ interface MapProps {
   focusedCustomer?: Customer | null
   onZoomChange?: (zoom: number) => void
   showBoundaries?: boolean
+  showBufferPins?: boolean
 }
+
+function polygonCentroid(coords: [number, number][]): [number, number] {
+  const n = coords.length
+  const sumLng = coords.reduce((s, c) => s + c[0], 0)
+  const sumLat = coords.reduce((s, c) => s + c[1], 0)
+  return [sumLat / n, sumLng / n]
+}
+
+const pinIcon = L.divIcon({
+  html: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="22" viewBox="0 0 24 28" fill="#111111">
+    <path d="M12 0C7.6 0 4 3.6 4 8c0 5.4 8 16 8 16s8-10.6 8-16c0-4.4-3.6-8-8-8zm0 11c-1.7 0-3-1.3-3-3s1.3-3 3-3 3 1.3 3 3-1.3 3-3 3z"/>
+  </svg>`,
+  className: '',
+  iconSize: [18, 22],
+  iconAnchor: [9, 22],
+})
 
 function ZoomTracker({ onZoomChange }: { onZoomChange?: (zoom: number) => void }) {
   const map = useMap()
@@ -33,6 +48,18 @@ function ZoomTracker({ onZoomChange }: { onZoomChange?: (zoom: number) => void }
     map.on('zoomend', handler)
     return () => { map.off('zoomend', handler) }
   }, [map, onZoomChange])
+  return null
+}
+
+function CursorController() {
+  const map = useMap()
+  useEffect(() => {
+    const onOpen  = () => { map.getContainer().style.cursor = 'default' }
+    const onClose = () => { map.getContainer().style.cursor = '' }
+    map.on('popupopen', onOpen)
+    map.on('popupclose', onClose)
+    return () => { map.off('popupopen', onOpen); map.off('popupclose', onClose) }
+  }, [map])
   return null
 }
 
@@ -57,7 +84,8 @@ function FlyToController({ customer }: { customer: Customer | null | undefined }
       ref={markerRef}
       center={[customer.latitude, customer.longitude]}
       radius={getMarkerRadius(customer) + 5}
-      pathOptions={{ color: '#2563eb', fillColor: color, fillOpacity: 1, weight: 3 }}
+      pathOptions={{ color: '#111111', fillColor: color, fillOpacity: 1, weight: 2 }}
+      renderer={renderer}
     >
       <Popup className="par-popup">
         <PopupCard customer={customer} />
@@ -69,7 +97,7 @@ function FlyToController({ customer }: { customer: Customer | null | undefined }
 const LUSAKA_CENTER: [number, number] = [-15.4166, 28.2833]
 const DEFAULT_ZOOM = 13
 
-export default function Map({ customers, kmzLayers, onKMZDrop, mapStyle, focusedCustomer, onZoomChange, showBoundaries = true }: MapProps) {
+export default function Map({ customers, kmzLayers, onKMZDrop, mapStyle, focusedCustomer, onZoomChange, showBoundaries = true, showBufferPins = true }: MapProps) {
   const handleDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault()
@@ -84,12 +112,12 @@ export default function Map({ customers, kmzLayers, onKMZDrop, mapStyle, focused
   }, [])
 
   const customerMarkers = React.useMemo(() => {
-    return customers.map((customer) => {
+    return customers.map((customer, i) => {
       const color = getMarkerColor(customer)
       const radius = getMarkerRadius(customer)
       return (
         <CircleMarker
-          key={customer.contract_ref}
+          key={customer.contract_ref || i}
           center={[customer.latitude, customer.longitude]}
           radius={radius + 2}
           pathOptions={{
@@ -99,6 +127,7 @@ export default function Map({ customers, kmzLayers, onKMZDrop, mapStyle, focused
             weight: 1,
           }}
           bubblingMouseEvents={false}
+          renderer={renderer}
         >
           <Popup className="par-popup">
             <PopupCard customer={customer} />
@@ -128,11 +157,11 @@ export default function Map({ customers, kmzLayers, onKMZDrop, mapStyle, focused
           attribution="© Mapbox © OpenStreetMap"
         />
 
-        {/* KMZ polygon layers — only rendered when visible */}
         {showBoundaries && kmzLayers
           .filter((layer) => layer.visible)
           .map((layer) => {
-            const isBuffer = layer.name.startsWith('Buffers —')
+            // FIX: use isBuffer flag set by fetchBufferLayers() — not name prefix
+            const isBuffer = !!layer.isBuffer
             return (
               <GeoJSON
                 key={layer.id}
@@ -145,13 +174,13 @@ export default function Map({ customers, kmzLayers, onKMZDrop, mapStyle, focused
                   fillOpacity: 0.08,
                 })}
                 onEachFeature={(feature, leafletLayer) => {
-                  // Buffers: use per-feature name from CSV (feature.properties.name)
-                  // Boundaries: use the admin-renamed layer name
-                  const name = isBuffer
-                    ? (feature.properties?.name || layer.name)
+                  // Buffers: show per-feature name from GeoJSON properties
+                  // Boundaries: show the admin-given layer name
+                  const label = isBuffer
+                    ? (feature.properties?.name ?? '')
                     : layer.name
-                  if (name) {
-                    leafletLayer.bindTooltip(name, {
+                  if (label) {
+                    leafletLayer.bindTooltip(label, {
                       sticky: true,
                       direction: 'top',
                       offset: [0, -6],
@@ -163,18 +192,32 @@ export default function Map({ customers, kmzLayers, onKMZDrop, mapStyle, focused
             )
           })}
 
-        {/* Customer markers in a higher-z pane so polygon fills don't intercept clicks */}
+        {showBufferPins && kmzLayers
+          .filter(layer => layer.visible && layer.isBuffer && layer.geojson)
+          .flatMap(layer =>
+            (layer.geojson as any).features?.map((feature: any, i: number) => {
+              const coords = feature.geometry?.coordinates?.[0] as [number, number][]
+              if (!coords?.length) return null
+              const center = polygonCentroid(coords)
+              const name = feature.properties?.name ?? ''
+              return (
+                <Marker
+                  key={`pin-${layer.id}-${i}`}
+                  position={center}
+                  icon={pinIcon}
+                >
+                  {name && <Popup className="par-popup"><div style={{ padding: '12px 16px', fontFamily: 'Inter,system-ui,sans-serif', fontSize: 13, fontWeight: 600 }}>{name}</div></Popup>}
+                </Marker>
+              )
+            }).filter(Boolean)
+          )}
+
         <Pane name="customerPane" style={{ zIndex: 450 }}>
-          <MarkerClusterGroup
-            chunkedLoading
-            maxClusterRadius={50}
-            disableClusteringAtZoom={16}
-          >
-            {customerMarkers}
-          </MarkerClusterGroup>
+          {customerMarkers}
         </Pane>
 
         <ZoomTracker onZoomChange={onZoomChange} />
+        <CursorController />
         <FlyToController customer={focusedCustomer} />
       </MapContainer>
     </div>

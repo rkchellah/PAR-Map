@@ -11,8 +11,9 @@ import Head from 'next/head'
 
 import { KMZLayer, PAR_COLORS, computeStats } from '../types/par'
 import { parseKmz } from '../utils/kmzParser'
-import { fetchLayers, toggleLayerVisibility } from '../lib/layerService'
+import { fetchLayers, fetchBufferLayers, toggleLayerVisibility } from '../lib/layerService'
 import { getCustomers } from '../lib/customerService'
+import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/useAuth'
 import { NavLogo, IconAdmin, IconSearch, IconX } from '../components/NavIcons'
 import {
@@ -136,7 +137,7 @@ export default function MapPage() {
     ;(async () => {
       setLayersLoading(true)
       try {
-        const sb = await fetchLayers()
+        const [sb, buffers] = await Promise.all([fetchLayers(), fetchBufferLayers()])
         const stored = localStorage.getItem('par-map:kmz-layers')
         let local: KMZLayer[] = []
         if (stored) {
@@ -146,9 +147,9 @@ export default function MapPage() {
             geojson: await parseKmz(base64ToFile(l.b64, l.name + '.kmz')),
           })))
         }
-        setKmzLayers([...sb, ...local])
-        try { const t = localStorage.getItem('par-map:teams'); setTeams(t ? JSON.parse(t) : []) }
-        catch { setTeams([]) }
+        setKmzLayers([...sb, ...buffers, ...local])
+        const { data: teamsData } = await supabase.from('teams').select('*')
+        setTeams((teamsData ?? []).map((t: any) => ({ id: t.id, name: t.name, color: t.color, layerIds: t.layer_ids ?? [] })))
       } catch (e) { console.error(e) } finally { setLayersLoading(false) }
     })()
   }, [])

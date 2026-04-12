@@ -1,7 +1,3 @@
-// ─── src/pages/admin.tsx ─────────────────────────────────────────────────────
-// Only change from original: removed sessionStorage auth check and replaced
-// with useAuth(). Everything else (UI, logic, components) is identical.
-
 import React, { useState, useEffect, useCallback } from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
@@ -9,6 +5,8 @@ import { useRouter } from 'next/router'
 import {
   fetchLayers, uploadLayer, deleteLayer,
   toggleLayerVisibility, updateLayerColor, renameLayer,
+  fetchBufferLayers, uploadBufferLayer, deleteBufferLayer,
+  toggleBufferLayerVisibility, updateBufferLayerColor, renameBufferLayer,
 } from '../lib/layerService'
 import { useAuth } from '../lib/useAuth'
 import { syncCustomers, getCustomers } from '../lib/customerService'
@@ -16,6 +14,7 @@ import { supabase } from '../lib/supabase'
 import { isPriorityVisit, PAR_COLORS } from '../types/par'
 import type { KMZLayer } from '../types/par'
 import Papa from 'papaparse'
+import OnboardingGuide from '../components/OnboardingGuide'
 import {
   IconUsers, IconLayers, IconBufferZone, IconCheckCircle, IconXCircle,
   IconUpload, IconChevronUp, IconChevronDown, IconSignOut, IconLogoMark,
@@ -23,31 +22,18 @@ import {
   IconBack, IconDownload, IconRefresh, IconEdit,
 } from '../components/icons'
 
-// ── Tokens ────────────────────────────────────────────────────────────────────
 const T = {
-  canvas: '#f7f7f7',
-  card: '#ffffff',
-  low: '#f0f0f0',
-  container: '#e8e8e8',
-  border: '#e2e2e2',
-  ink: '#111111',
-  mid: '#555555',
-  muted: '#999999',
-  error: '#c0392b',
-  errorDim: 'rgba(192,57,43,0.06)',
-  success: '#1a7a4a',
+  canvas: '#f7f7f7', card: '#ffffff', low: '#f0f0f0', container: '#e8e8e8',
+  border: '#e2e2e2', ink: '#111111', mid: '#555555', muted: '#999999',
+  error: '#c0392b', errorDim: 'rgba(192,57,43,0.06)', success: '#1a7a4a',
   shadow: '0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.05)',
   shadowSm: '0 1px 2px rgba(0,0,0,0.05)',
 } as const
 
 const LAYER_COLORS = [
-  '#111111', '#374151', '#64748b',
-  '#1e40af', '#2563eb', '#3d3fcc', '#0e7490',
-  '#166534', '#1a7a4a', '#059669',
-  '#7f1d1d', '#c0392b', '#dc2626', '#be185d',
-  '#9a3412', '#d97706', '#ca8a04',
-  '#6b21a8', '#7c3aed', '#a21caf',
-  '#0f766e', '#0891b2',
+  '#111111','#374151','#64748b','#1e40af','#2563eb','#3d3fcc','#0e7490',
+  '#166534','#1a7a4a','#059669','#7f1d1d','#c0392b','#dc2626','#be185d',
+  '#9a3412','#d97706','#ca8a04','#6b21a8','#7c3aed','#a21caf','#0f766e','#0891b2',
 ]
 
 type Section = 'customers' | 'layers' | 'buffers'
@@ -67,20 +53,14 @@ function geodesicPoint(lat: number, lon: number, radiusM: number, angleDeg: numb
   const lon2 = lonR + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(latR), Math.cos(d) - Math.sin(latR) * Math.sin(lat2))
   return [(lon2 * 180) / Math.PI, (lat2 * 180) / Math.PI]
 }
-function convertDate(raw: string): string {
-  if (!raw?.trim()) return ''
-  const s = raw.trim(), m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
-  return s.match(/^\d{4}-\d{2}-\d{2}$/) ? s : s
-}
-function parBadgeCls(st: string) {
-  if (st === 'ONTIME' || st === 'PAR 1-30') return 'bg-green-50 text-green-700'
-  if (st === 'PAR 31-60') return 'bg-orange-50 text-orange-700'
-  if (st === 'PAR 61-90') return 'bg-red-50 text-red-600'
-  return 'bg-red-50 text-red-800'
+
+function parBadgeStyle(st: string): React.CSSProperties {
+  if (st === 'ONTIME' || st === 'PAR 1-30') return { background: '#f0fdf4', color: '#15803d' }
+  if (st === 'PAR 31-60') return { background: '#fff7ed', color: '#c2410c' }
+  if (st === 'PAR 61-90') return { background: '#fef2f2', color: '#dc2626' }
+  return { background: '#fef2f2', color: '#991b1b' }
 }
 
-// ── Primitives (unchanged) ─────────────────────────────────────────────────────
 function Btn({ children, onClick, disabled, variant = 'primary', size = 'md' }: {
   children: React.ReactNode; onClick?: () => void; disabled?: boolean
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; size?: 'sm' | 'md'
@@ -121,8 +101,8 @@ function Btn({ children, onClick, disabled, variant = 'primary', size = 'md' }: 
 function StatusMsg({ s }: { s: Status }) {
   if (s.type === 'idle' || !s.msg) return null
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 13, color: s.type === 'ok' ? T.success : T.error, fontFamily: 'Inter,system-ui,sans-serif' }}>
-      {s.type === 'ok' ? <IconCheckCircle size={14} /> : <IconXCircle size={14} />}{s.msg}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 13, color: s.type === 'ok' ? T.success : s.type === 'loading' ? T.muted : T.error, fontFamily: 'Inter,system-ui,sans-serif' }}>
+      {s.type === 'ok' ? <IconCheckCircle size={14} /> : s.type === 'err' ? <IconXCircle size={14} /> : null}{s.msg}
     </div>
   )
 }
@@ -239,7 +219,7 @@ function LayerRow({ layer, onToggle, onDelete, onAssign, onUnassign, showUnassig
         <div style={{ padding: '10px 20px 12px 44px', background: T.low, borderTop: `1px solid ${T.border}` }}>
           <form onSubmit={e => { e.preventDefault(); if (renameVal.trim()) onRenameSubmit(renameVal.trim()) }} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <input autoFocus value={renameVal} onChange={e => setRenameVal(e.target.value)} style={{ flex: 1, height: 34, padding: '0 10px', background: T.card, border: `1.5px solid ${T.border}`, borderRadius: 7, fontSize: 13, color: T.ink, fontFamily: 'Inter,system-ui,sans-serif', outline: 'none', transition: 'border-color 0.15s' }} onFocus={e => e.currentTarget.style.borderColor = '#111'} onBlur={e => e.currentTarget.style.borderColor = T.border} />
-            <button type="submit" disabled={!renameVal.trim() || renameVal.trim() === layer.name} style={{ height: 34, padding: '0 12px', borderRadius: 7, border: 'none', background: '#111', color: '#fff', fontSize: 12, fontWeight: 600, cursor: !renameVal.trim() || renameVal.trim() === layer.name ? 'not-allowed' : 'pointer', opacity: !renameVal.trim() || renameVal.trim() === layer.name ? 0.4 : 1, fontFamily: 'Inter,system-ui,sans-serif', transition: 'opacity 0.12s' }}>Save</button>
+            <button type="submit" disabled={!renameVal.trim() || renameVal.trim() === layer.name} style={{ height: 34, padding: '0 12px', borderRadius: 7, border: 'none', background: '#111', color: '#fff', fontSize: 12, fontWeight: 600, cursor: !renameVal.trim() || renameVal.trim() === layer.name ? 'not-allowed' : 'pointer', opacity: !renameVal.trim() || renameVal.trim() === layer.name ? 0.4 : 1, fontFamily: 'Inter,system-ui,sans-serif' }}>Save</button>
             <button type="button" onClick={onRenameEdit} style={{ height: 34, padding: '0 10px', borderRadius: 7, border: `1.5px solid ${T.border}`, background: T.card, color: T.mid, fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'Inter,system-ui,sans-serif' }}>Cancel</button>
           </form>
         </div>
@@ -249,68 +229,44 @@ function LayerRow({ layer, onToggle, onDelete, onAssign, onUnassign, showUnassig
   )
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const router = useRouter()
   const { isAdmin, loading: authLoading, authError, signOut } = useAuth()
 
-  // ── Auth guard ─────────────────────────────────────────────────────────────
-  // Only redirect AFTER loading is fully done (session + profile both resolved).
-  // Never redirect while loading=true — profile fetch is async and isAdmin
-  // will be false until it completes.
-  // Do NOT redirect if there's an authError — show the error instead so the
-  // user isn't silently looped back to login with no explanation.
   useEffect(() => {
-    if (!authLoading && !authError && !isAdmin) {
-      router.replace('/login?next=/admin')
-    }
+    if (!authLoading && !authError && !isAdmin) router.replace('/login?next=/admin')
   }, [authLoading, authError, isAdmin, router])
 
-  // Still loading session or profile — show spinner, never redirect
-  if (authLoading) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f7f7' }}>
-        <div style={{ width: 18, height: 18, borderRadius: '50%', border: '2.5px solid #e8e8e8', borderTopColor: '#111', animation: 'spin 0.7s linear infinite' }} />
-        <style>{`@keyframes spin{to{transform:rotate(360deg);}}`}</style>
-      </div>
-    )
-  }
+  if (authLoading) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f7f7' }}>
+      <div style={{ width: 18, height: 18, borderRadius: '50%', border: '2.5px solid #e8e8e8', borderTopColor: '#111', animation: 'spin 0.7s linear infinite' }} />
+      <style>{`@keyframes spin{to{transform:rotate(360deg);}}`}</style>
+    </div>
+  )
 
-  // Profile fetch failed — show error instead of silently redirecting
-  if (authError) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f7f7', fontFamily: 'Inter,system-ui,sans-serif' }}>
-        <style>{`@keyframes spin{to{transform:rotate(360deg);}}`}</style>
-        <div style={{ maxWidth: 360, textAlign: 'center', padding: 24 }}>
-          <div style={{ fontSize: 13, color: T.error, background: T.errorDim, border: `1px solid rgba(192,57,43,0.15)`, borderRadius: 8, padding: '12px 16px', marginBottom: 20 }}>
-            {authError}
-          </div>
-          <button
-            onClick={() => window.location.reload()}
-            style={{ fontSize: 13, fontWeight: 600, color: T.ink, background: T.card, border: `1.5px solid ${T.border}`, borderRadius: 8, padding: '10px 20px', cursor: 'pointer' }}
-          >
-            Retry
-          </button>
-        </div>
+  if (authError) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f7f7', fontFamily: 'Inter,system-ui,sans-serif' }}>
+      <style>{`@keyframes spin{to{transform:rotate(360deg);}}`}</style>
+      <div style={{ maxWidth: 360, textAlign: 'center', padding: 24 }}>
+        <div style={{ fontSize: 13, color: T.error, background: T.errorDim, border: `1px solid rgba(192,57,43,0.15)`, borderRadius: 8, padding: '12px 16px', marginBottom: 20 }}>{authError}</div>
+        <button onClick={() => window.location.reload()} style={{ fontSize: 13, fontWeight: 600, color: T.ink, background: T.card, border: `1.5px solid ${T.border}`, borderRadius: 8, padding: '10px 20px', cursor: 'pointer' }}>Retry</button>
       </div>
-    )
-  }
+    </div>
+  )
 
-  // Loading done but not admin — render nothing, redirect already queued above
   if (!isAdmin) return null
-
   return <AdminContent signOut={signOut} />
 }
 
-// ── AdminContent (the actual page — only renders when confirmed admin) ─────────
 function AdminContent({ signOut }: { signOut: () => void }) {
-  const [active, setActive]     = useState<Section>('customers')
-  const [visible, setVisible]   = useState(true)
-  const [layers, setLayers]     = useState<KMZLayer[]>([])
+  const [active, setActive]   = useState<Section>('customers')
+  const [visible, setVisible] = useState(true)
+  const [layers, setLayers]   = useState<KMZLayer[]>([])
   const [layersLoading, setLayersLoading] = useState(true)
-  const [localLayers, setLocalLayers]     = useState<{ id: string; name: string; color: string; visible: boolean }[]>([])
   const [editColorId, setEditColorId]     = useState<string | null>(null)
   const [editRenameId, setEditRenameId]   = useState<string | null>(null)
+  const [editBufColorId, setEditBufColorId]   = useState<string | null>(null)
+  const [editBufRenameId, setEditBufRenameId] = useState<string | null>(null)
 
   const [kmzFile, setKmzFile]         = useState<File | null>(null)
   const [layerName, setLayerName]     = useState('')
@@ -318,27 +274,25 @@ function AdminContent({ signOut }: { signOut: () => void }) {
   const [layerLocked, setLayerLocked] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<Status>({ type: 'idle', msg: '' })
 
-  const [teams, setTeams] = useState<Team[]>(() => {
-    try { const s = localStorage.getItem('par-map:teams'); return s ? JSON.parse(s) : [] } catch { return [] }
-  })
+  const [teams, setTeams]             = useState<Team[]>([])
   const [newTeamName, setNewTeamName]   = useState('')
   const [newTeamColor, setNewTeamColor] = useState(LAYER_COLORS[0])
   const [showNewTeam, setShowNewTeam]   = useState(false)
   const [teamOpen, setTeamOpen]         = useState<Record<string, boolean>>({})
   const [assignModal, setAssignModal]   = useState<{ layerId: string; layerName: string } | null>(null)
 
-  const [csvFile, setCsvFile]   = useState<File | null>(null)
-  const [radius, setRadius]     = useState('100')
-  const [unit, setUnit]         = useState<'m' | 'km'>('m')
-  const [bufColor, setBufColor] = useState(LAYER_COLORS[7])
+  const [csvFile, setCsvFile]     = useState<File | null>(null)
+  const [radius, setRadius]       = useState('100')
+  const [unit, setUnit]           = useState<'m' | 'km'>('m')
+  const [bufColor, setBufColor]   = useState(LAYER_COLORS[7])
   const [bufLocked, setBufLocked] = useState(false)
   const [bufStatus, setBufStatus] = useState<Status>({ type: 'idle', msg: '' })
   const [prev2, setPrev2]         = useState<Record<string, string>[]>([])
+  const [bufferLayers, setBufferLayers] = useState<KMZLayer[]>([])
 
-  const [parCsv, setParCsv]             = useState<File | null>(null)
-
-  const [parStatus, setParStatus]       = useState<Status>({ type: 'idle', msg: '' })
-  const [prev3, setPrev3]               = useState<Record<string, string>[]>([])
+  const [parCsv, setParCsv]               = useState<File | null>(null)
+  const [parStatus, setParStatus]         = useState<Status>({ type: 'idle', msg: '' })
+  const [prev3, setPrev3]                 = useState<Record<string, string>[]>([])
   const [liveCustomers, setLiveCustomers] = useState<any[]>([])
   const [liveWeekLabel, setLiveWeekLabel] = useState('')
 
@@ -349,164 +303,175 @@ function AdminContent({ signOut }: { signOut: () => void }) {
     }).catch(() => {})
   }, [])
 
-  const boundaryLayers = layers.filter(l => !l.name.startsWith('Buffers —'))
-  const bufferLayers   = layers.filter(l => l.name.startsWith('Buffers —'))
-
-  const saveTeams = (t: Team[]) => { setTeams(t); try { localStorage.setItem('par-map:teams', JSON.stringify(t)) } catch { } }
-
   const loadLayers = useCallback(async () => {
     setLayersLoading(true)
-    setLayers(await fetchLayers())
-    try {
-      const s = localStorage.getItem('par-map:kmz-layers')
-      setLocalLayers((s ? JSON.parse(s) : []).map((l: any) => ({ id: l.id, name: l.name, color: l.color, visible: l.visible })))
-    } catch { setLocalLayers([]) }
+    const [fetchedLayers, fetchedBuffers, teamsResult] = await Promise.all([
+      fetchLayers(), fetchBufferLayers(), supabase.from('teams').select('*'),
+    ])
+    setLayers(fetchedLayers)
+    setBufferLayers(fetchedBuffers)
+    setTeams((teamsResult.data ?? []).map((r: any) => ({ id: r.id, name: r.name, color: r.color, layerIds: r.layer_ids ?? [] })))
     setLayersLoading(false)
   }, [])
 
   useEffect(() => { loadLayers() }, [loadLayers])
 
   function navigate(s: Section) { if (s === active) return; setVisible(false); setTimeout(() => { setActive(s); setVisible(true) }, 120) }
+  async function handleLogout() { await signOut(); window.location.href = '/login' }
 
-  async function handleLogout() {
-    await signOut()
-    window.location.href = '/login'
-  }
-
-  function createTeam() {
+  async function createTeam() {
     if (!newTeamName.trim()) return
     const t: Team = { id: crypto.randomUUID(), name: newTeamName.trim(), color: newTeamColor, layerIds: [] }
-    saveTeams([...teams, t]); setNewTeamName(''); setShowNewTeam(false)
+    const { error } = await supabase.from('teams').insert({ id: t.id, name: t.name, color: t.color, layer_ids: t.layerIds })
+    if (!error) { setTeams(prev => [...prev, t]); setNewTeamName(''); setShowNewTeam(false) }
   }
-  function deleteTeam(id: string) { if (!confirm('Delete team?')) return; saveTeams(teams.filter(t => t.id !== id)) }
-  function assignToTeam(teamId: string, layerId: string) {
-    saveTeams(teams.map(t => {
+  async function deleteTeam(id: string) {
+    if (!confirm('Delete team?')) return
+    const { error } = await supabase.from('teams').delete().eq('id', id)
+    if (!error) setTeams(prev => prev.filter(t => t.id !== id))
+  }
+  async function assignToTeam(teamId: string, layerId: string) {
+    const updated = teams.map(t => {
       if (t.id === teamId && !t.layerIds.includes(layerId)) return { ...t, layerIds: [...t.layerIds, layerId] }
       if (t.id !== teamId && t.layerIds.includes(layerId)) return { ...t, layerIds: t.layerIds.filter(i => i !== layerId) }
       return t
-    })); setAssignModal(null)
+    })
+    const changed = updated.filter((t, i) => t !== teams[i])
+    await Promise.all(changed.map(t => supabase.from('teams').update({ layer_ids: t.layerIds }).eq('id', t.id)))
+    setTeams(updated); setAssignModal(null)
   }
-  function removeFromTeam(teamId: string, layerId: string) {
-    saveTeams(teams.map(t => t.id === teamId ? { ...t, layerIds: t.layerIds.filter(i => i !== layerId) } : t))
+  async function removeFromTeam(teamId: string, layerId: string) {
+    const updatedIds = teams.find(t => t.id === teamId)?.layerIds.filter(i => i !== layerId) ?? []
+    await supabase.from('teams').update({ layer_ids: updatedIds }).eq('id', teamId)
+    setTeams(prev => prev.map(t => t.id === teamId ? { ...t, layerIds: updatedIds } : t))
   }
   async function handleLayerColorChange(id: string, color: string) {
-    try { await updateLayerColor(id, color); loadLayers() } catch { }
+    try { await updateLayerColor(id, color); loadLayers() } catch {}
     setEditColorId(null)
   }
   async function handleLayerRename(id: string, name: string) {
-    try { await renameLayer(id, name); loadLayers() } catch { }
+    try { await renameLayer(id, name); loadLayers() } catch {}
     setEditRenameId(null)
+  }
+  async function handleBufferColorChange(id: string, color: string) {
+    setBufferLayers(prev => prev.map(l => l.id === id ? { ...l, color } : l))
+    setEditBufColorId(null)
+    try { await updateBufferLayerColor(id, color) } catch {}
+  }
+  async function handleBufferRename(id: string, name: string) {
+    setBufferLayers(prev => prev.map(l => l.id === id ? { ...l, name } : l))
+    setEditBufRenameId(null)
+    try { await renameBufferLayer(id, name) } catch {}
   }
   async function handleUpload() {
     if (!kmzFile || !layerName.trim()) return
     setUploadStatus({ type: 'loading', msg: '' })
-    try {
-      await uploadLayer(kmzFile, layerName, layerColor, layerLocked)
-      setUploadStatus({ type: 'ok', msg: 'Layer uploaded' }); setKmzFile(null); setLayerName(''); loadLayers()
-    } catch { setUploadStatus({ type: 'err', msg: 'Upload failed' }) }
+    try { await uploadLayer(kmzFile, layerName, layerColor, layerLocked); setUploadStatus({ type: 'ok', msg: 'Layer uploaded' }); setKmzFile(null); setLayerName(''); loadLayers() }
+    catch { setUploadStatus({ type: 'err', msg: 'Upload failed' }) }
   }
   async function handleDelete(id: string, filePath?: string) {
     if (!filePath || !confirm('Delete this layer?')) return
     await deleteLayer(id, filePath); loadLayers()
-    saveTeams(teams.map(t => ({ ...t, layerIds: t.layerIds.filter(i => i !== id) })))
+    const affected = teams.filter(t => t.layerIds.includes(id))
+    await Promise.all(affected.map(t => supabase.from('teams').update({ layer_ids: t.layerIds.filter(i => i !== id) }).eq('id', t.id)))
+    setTeams(prev => prev.map(t => ({ ...t, layerIds: t.layerIds.filter(i => i !== id) })))
   }
   async function handleToggle(layer: KMZLayer) { await toggleLayerVisibility(layer.id, !layer.visible); loadLayers() }
-  function downloadTemplate() {
-    const csv = ['Code,Name,Area,Latitude,Longitude,PAR Status,Phone,Phone 2,Lead Generate,Lead Generator Name', 'ECS-0001,Customer Name,Area Name,-15.3580,28.3250,ONTIME,+260 97 0000000,,Agent Code,Agent Name'].join('\n')
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'PAR_Map_Template.csv'; a.click()
+  async function handleToggleBuffer(layer: KMZLayer) {
+    await toggleBufferLayerVisibility(layer.id, !layer.visible)
+    setBufferLayers(prev => prev.map(l => l.id === layer.id ? { ...l, visible: !layer.visible } : l))
   }
+  async function handleDeleteBuffer(id: string, filePath?: string) {
+    if (!confirm('Delete this buffer layer?')) return
+    await deleteBufferLayer(id, filePath ?? '')
+    setBufferLayers(prev => prev.filter(l => l.id !== id))
+  }
+
+  function downloadTemplate() {
+    const csv = [
+      'Contract Reference,Name,Area,Latitude,Longitude,PAR Status,Phone,Phone 2,Lead Generate,Lead Generator Name',
+      'ECS-0001,Customer Name,Area Name,-15.3580,28.3250,ONTIME,+260970000000,,CP001,Agent Name'
+    ].join('\n')
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    a.download = 'PAR_Map_Template.csv'; a.click()
+  }
+
   function onParCsvSelect(f: File) {
     setParCsv(f); setParStatus({ type: 'idle', msg: '' })
-    Papa.parse(f, { header: true, skipEmptyLines: true, complete: r => setPrev3((r.data as Record<string, string>[]).slice(0, 10)) })
+    Papa.parse(f, { header: true, skipEmptyLines: true, complete: r => {
+      const normalized = (r.data as Record<string, string>[]).slice(0, 10).map(row => {
+        const n: Record<string, string> = {}
+        Object.keys(row).forEach(k => { n[k.toLowerCase().trim()] = row[k] })
+        return n
+      })
+      setPrev3(normalized)
+    }})
   }
+
   async function handleGenerateCustomers() {
     if (!parCsv) return
     setParStatus({ type: 'loading', msg: 'Syncing to database...' })
-
-    Papa.parse(parCsv, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (res) => {
-        const rows: any[] = []
-        let skipped = 0
-
-        for (const row of res.data as Record<string, string>[]) {
-          const lat = parseFloat(row['Latitude'])
-          const lon = parseFloat(row['Longitude'])
-          if (!row['Latitude'] || !row['Longitude'] || isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
-            skipped++
-            continue
-          }
-          rows.push({
-            contract_ref: row['Contract reference'] ?? '',
-            name: row['Name'] ?? '',
-            phone: row['Phone'] ?? '',
-            phone2: row['Phone 2'] ?? '',
-            area: row['Area'] ?? '',
-            par_status: row['PAR Status'] ?? '',
-            lead_generate: row['Lead Generate'] ?? '',
-            lead_generate_name: row['Lead Generator Name'] ?? '',
-            latitude: lat,
-            longitude: lon,
-          })
-        }
-
-        try {
-          await syncCustomers(rows, '')
-          setParStatus({ type: 'ok', msg: `${rows.length} records synced. ${skipped} skipped.` })
-          setParCsv(null)
-          setPrev3([])
-          // Refresh live registry
-          getCustomers().then(data => {
-            setLiveCustomers(data)
-            if (data[0]?.week_label) setLiveWeekLabel(data[0].week_label)
-          }).catch(() => {})
-        } catch (e: any) {
-          setParStatus({ type: 'err', msg: e.message || 'Sync failed' })
-        }
-      },
-      error: () => setParStatus({ type: 'err', msg: 'Failed to parse CSV' }),
-    })
+    Papa.parse(parCsv, { header: true, skipEmptyLines: true, complete: async (res) => {
+      const rows: any[] = []; let skipped = 0
+      const formatPhone = (val: string) => {
+        if (!val) return ''
+        const trimmed = val.trim()
+        if (trimmed.includes('E+') || trimmed.includes('e+')) { const num = parseFloat(trimmed); if (!isNaN(num)) return Math.round(num).toString() }
+        return trimmed
+      }
+      for (const row of res.data as Record<string, string>[]) {
+        const r: Record<string, string> = {}
+        Object.keys(row).forEach(k => { r[k.toLowerCase().trim()] = (row as any)[k] })
+        const lat = parseFloat(r['latitude']), lon = parseFloat(r['longitude'])
+        if (!r['latitude'] || !r['longitude'] || isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || Math.abs(lat) > 90 || Math.abs(lon) > 180) { skipped++; continue }
+        rows.push({ contract_ref: r['contract reference'] || r['code'] || '', name: r['name'] ?? '', phone: formatPhone(r['phone'] ?? ''), phone2: formatPhone(r['phone 2'] ?? ''), area: r['area'] ?? '', par_status: r['par status'] ?? '', lead_generate: r['lead generate'] ?? '', lead_generate_name: r['lead generator name'] ?? '', latitude: lat, longitude: lon })
+      }
+      try {
+        await syncCustomers(rows, '')
+        setParStatus({ type: 'ok', msg: `${rows.length} records synced. ${skipped} skipped.` })
+        setParCsv(null); setPrev3([])
+        getCustomers().then(data => { setLiveCustomers(data); if (data[0]?.week_label) setLiveWeekLabel(data[0].week_label) }).catch(() => {})
+      } catch (e: any) { setParStatus({ type: 'err', msg: e.message || 'Sync failed' }) }
+    }, error: () => setParStatus({ type: 'err', msg: 'Failed to parse CSV' }) })
   }
+
   function handleGenerateBuffers() {
-    if (!csvFile) return; setBufStatus({ type: 'loading', msg: '' })
+    if (!csvFile) return
+    setBufStatus({ type: 'loading', msg: '' })
     const radM = unit === 'km' ? parseFloat(radius) * 1000 : parseFloat(radius)
-    Papa.parse(csvFile, {
-      header: true, skipEmptyLines: true,
-      complete: async res => {
-        try {
-          const features: object[] = []
-          for (const row of res.data as Record<string, string>[]) {
-            const lat = parseFloat(row.Latitude ?? row.latitude ?? row.Lat ?? row.lat)
-            const lon = parseFloat(row.Longitude ?? row.longitude ?? row.Lon ?? row.lon ?? row.Lng ?? row.lng)
-            if (isNaN(lat) || isNaN(lon)) continue
-            const coords: [number, number][] = []
-            for (let i = 0; i < 36; i++) coords.push(geodesicPoint(lat, lon, radM, i * 10))
-            coords.push(coords[0])
-            features.push({ type: 'Feature', properties: { name: row.Name ?? row.name ?? 'Buffer' }, geometry: { type: 'Polygon', coordinates: [coords] } })
-          }
-          if (!features.length) throw new Error('No valid coordinates')
-          const blob = new Blob([JSON.stringify({ type: 'FeatureCollection', features })], { type: 'application/json' })
-          await uploadLayer(new File([blob], `buffers_${Date.now()}.geojson`), `Buffers — ${csvFile.name.replace(/\.csv$/i, '')} (${radius}${unit})`, bufColor, bufLocked)
-          setBufStatus({ type: 'ok', msg: `${features.length} buffers uploaded` })
-          setCsvFile(null); setPrev2([]); loadLayers()
-        } catch (e: any) { setBufStatus({ type: 'err', msg: e.message ?? 'Failed' }) }
-      }, error: () => setBufStatus({ type: 'err', msg: 'CSV parse error' }),
-    })
+    Papa.parse(csvFile, { header: true, skipEmptyLines: true, complete: async res => {
+      try {
+        const features: object[] = []
+        for (const row of res.data as Record<string, string>[]) {
+          const lat = parseFloat(row.Latitude ?? row.latitude ?? row.Lat ?? row.lat)
+          const lon = parseFloat(row.Longitude ?? row.longitude ?? row.Lon ?? row.lon ?? row.Lng ?? row.lng)
+          if (isNaN(lat) || isNaN(lon)) continue
+          const coords: [number, number][] = []
+          for (let i = 0; i < 36; i++) coords.push(geodesicPoint(lat, lon, radM, i * 10))
+          coords.push(coords[0])
+          features.push({ type: 'Feature', properties: { name: row.Name ?? row.name ?? 'Buffer' }, geometry: { type: 'Polygon', coordinates: [coords] } })
+        }
+        if (!features.length) throw new Error('No valid coordinates')
+        const blob = new Blob([JSON.stringify({ type: 'FeatureCollection', features })], { type: 'application/json' })
+        await uploadBufferLayer(new File([blob], `buffers_${Date.now()}.geojson`), `${csvFile.name.replace(/\.csv$/i, '')} (${radius}${unit})`, bufColor, bufLocked)
+        setBufStatus({ type: 'ok', msg: `${features.length} buffers uploaded` })
+        setCsvFile(null); setPrev2([]); loadLayers()
+      } catch (e: any) { setBufStatus({ type: 'err', msg: e.message ?? 'Failed' }) }
+    }, error: () => setBufStatus({ type: 'err', msg: 'CSV parse error' }) })
   }
 
-  const assignedIds    = new Set(teams.flatMap(t => t.layerIds))
-  const ungroupedLayers = boundaryLayers.filter(l => !assignedIds.has(l.id))
+  const assignedIds     = new Set(teams.flatMap(t => t.layerIds))
+  const ungroupedLayers = layers.filter(l => !assignedIds.has(l.id))
   const rowProps = (layer: KMZLayer) => ({
-    layer,
-    onToggle: () => handleToggle(layer),
-    onDelete: () => handleDelete(layer.id, layer.file_path),
-    editColorOpen:  editColorId === layer.id,
-    onColorEdit:    () => { setEditColorId(editColorId === layer.id ? null : layer.id); setEditRenameId(null) },
-    onColorChange:  (c: string) => handleLayerColorChange(layer.id, c),
-    editRenameOpen: editRenameId === layer.id,
-    onRenameEdit:   () => { setEditRenameId(editRenameId === layer.id ? null : layer.id); setEditColorId(null) },
-    onRenameSubmit: (name: string) => handleLayerRename(layer.id, name),
+    layer, onToggle: () => handleToggle(layer), onDelete: () => handleDelete(layer.id, layer.file_path),
+    editColorOpen: editColorId === layer.id, onColorEdit: () => { setEditColorId(editColorId === layer.id ? null : layer.id); setEditRenameId(null) }, onColorChange: (c: string) => handleLayerColorChange(layer.id, c),
+    editRenameOpen: editRenameId === layer.id, onRenameEdit: () => { setEditRenameId(editRenameId === layer.id ? null : layer.id); setEditColorId(null) }, onRenameSubmit: (name: string) => handleLayerRename(layer.id, name),
+  })
+  const bufRowProps = (layer: KMZLayer) => ({
+    layer, onToggle: () => handleToggleBuffer(layer), onDelete: () => handleDeleteBuffer(layer.id, layer.file_path),
+    editColorOpen: editBufColorId === layer.id, onColorEdit: () => { setEditBufColorId(editBufColorId === layer.id ? null : layer.id); setEditBufRenameId(null) }, onColorChange: (c: string) => handleBufferColorChange(layer.id, c),
+    editRenameOpen: editBufRenameId === layer.id, onRenameEdit: () => { setEditBufRenameId(editBufRenameId === layer.id ? null : layer.id); setEditBufColorId(null) }, onRenameSubmit: (name: string) => handleBufferRename(layer.id, name),
   })
 
   return (
@@ -527,6 +492,9 @@ function AdminContent({ signOut }: { signOut: () => void }) {
           .fi{animation:fadeIn 0.14s ease;}
         `}</style>
       </Head>
+
+      {/* Onboarding guide — first visit only */}
+      <OnboardingGuide />
 
       {/* Assign modal */}
       {assignModal && (
@@ -560,7 +528,6 @@ function AdminContent({ signOut }: { signOut: () => void }) {
       )}
 
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-        {/* SIDEBAR */}
         <aside style={{ width: 268, flexShrink: 0, height: '100%', display: 'flex', flexDirection: 'column', background: T.card, borderRight: `1.5px solid ${T.border}` }}>
           <div style={{ padding: '18px 18px 14px', borderBottom: `1.5px solid ${T.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
             <IconLogoMark size={24} color={T.ink} style={{ flexShrink: 0 }} />
@@ -599,11 +566,9 @@ function AdminContent({ signOut }: { signOut: () => void }) {
           </div>
         </aside>
 
-        {/* MAIN */}
         <main style={{ flex: 1, minWidth: 0, overflowY: 'auto', background: T.canvas }}>
           <div style={{ maxWidth: 1140, margin: '0 auto', padding: '36px 36px', opacity: visible ? 1 : 0, transition: 'opacity 0.12s' }}>
 
-            {/* CUSTOMER DATA */}
             {active === 'customers' && (
               <div className="fi">
                 <div style={{ marginBottom: 24 }}>
@@ -619,51 +584,41 @@ function AdminContent({ signOut }: { signOut: () => void }) {
                         <p style={{ fontSize: 12, color: T.muted, marginTop: 7 }}>Template has dummy data — replace with your export</p>
                       </div>
                       <DZ file={parCsv} label="Drop .csv file here" hint="CSV only" accept=".csv" id="par-csv" onSel={onParCsvSelect} />
-                      {prev3.length > 0 && <PrevTable data={prev3} cols={['Contract reference', 'Area', 'PAR Status']} />}
+                      {prev3.length > 0 && <PrevTable data={prev3} cols={['contract reference', 'area', 'par status']} />}
                       <Btn onClick={handleGenerateCustomers} disabled={!parCsv}><IconUpload size={14} /> Sync to Database</Btn>
                       <StatusMsg s={parStatus} />
                       <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 14, marginTop: 4 }}>
-                        <Btn
-                          variant="danger"
-                          size="sm"
-                          onClick={async () => {
-                            if (!confirm('Delete all customer data? This cannot be undone.')) return
-                            setParStatus({ type: 'loading', msg: 'Deleting...' })
-                            const { error } = await supabase.from('customers').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-                            if (error) {
-                              setParStatus({ type: 'err', msg: error.message })
-                            } else {
-                              setParStatus({ type: 'ok', msg: 'All customer data deleted.' })
-                              setLiveCustomers([])
-                              setLiveWeekLabel('')
-                            }
-                          }}
-                        >
-                          <IconTrash size={13} /> Clear all customer data
-                        </Btn>
+                        <Btn variant="danger" size="sm" onClick={async () => {
+                          if (!confirm('Delete all customer data? This cannot be undone.')) return
+                          setParStatus({ type: 'loading', msg: 'Deleting...' })
+                          const { error } = await supabase.from('customers').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+                          if (error) setParStatus({ type: 'err', msg: error.message })
+                          else { setParStatus({ type: 'ok', msg: 'All customer data deleted.' }); setLiveCustomers([]); setLiveWeekLabel('') }
+                        }}><IconTrash size={13} /> Clear all customer data</Btn>
                       </div>
                     </div>
                   </Card>
-                  <Card>
-                    <CardHeader title="Live Registry" sub={liveWeekLabel} right={<span style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, background: T.low, color: T.mid, fontFamily: 'DM Mono' }}>{liveCustomers.length.toLocaleString()}</span>} />
+                  <div style={{ background: T.card, borderRadius: '16px 16px 10px 10px', border: `1.5px solid ${T.border}`, overflow: 'hidden' }}>
+                    <CardHeader title="Customers" sub={liveWeekLabel} right={<span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: T.low, color: T.mid, fontFamily: 'DM Mono' }}>{liveCustomers.length.toLocaleString()}</span>} />
                     <div style={{ maxHeight: 460, overflowY: 'auto' }}>
-                      {liveCustomers.map(c => (
-                        <div key={c.contract_ref} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 18px', borderBottom: `1px solid ${T.border}`, transition: 'background 0.1s' }}
+                      {liveCustomers.map((c, i) => (
+                        <div key={c.contract_ref || i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 20px', borderBottom: `1px solid ${T.border}`, transition: 'background 0.1s' }}
                           onMouseEnter={e => e.currentTarget.style.background = T.low} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                          <Dot color={PAR_COLORS[c.par_status] ?? '#ccc'} />
-                          {isPriorityVisit(c) && <IconAlertCircle size={11} color={T.error} style={{ flexShrink: 0 }} />}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                            <Dot color={PAR_COLORS[c.par_status] ?? '#ccc'} />
+                            {isPriorityVisit(c) && <IconAlertCircle size={10} color={T.error} />}
+                          </div>
                           <span style={{ fontSize: 11, fontFamily: 'DM Mono', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: T.ink }}>{c.contract_ref}</span>
-                          <span style={{ fontSize: 11, color: T.muted, flexShrink: 0 }}>{c.area}</span>
-                          <span className={`text-[10px] font-semibold px-1.5 py0.5 rounded-full shrink-0 ${parBadgeCls(c.par_status)}`} style={{ fontSize: 10, whiteSpace: 'nowrap' }}>{c.par_status}</span>
+                          <span style={{ fontSize: 11, color: T.muted, flexShrink: 0, marginRight: 6 }}>{c.area}</span>
+                          <span style={{ ...parBadgeStyle(c.par_status), fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0, padding: '2px 7px', borderRadius: 4, fontFamily: 'DM Mono' }}>{c.par_status}</span>
                         </div>
                       ))}
                     </div>
-                  </Card>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* BOUNDARY LAYERS */}
             {active === 'layers' && (
               <div className="fi">
                 <div style={{ marginBottom: 24 }}>
@@ -697,14 +652,13 @@ function AdminContent({ signOut }: { signOut: () => void }) {
                             <div style={{ flex: 1 }}><FL>Team name</FL><FI value={newTeamName} onChange={e => setNewTeamName(e.target.value)} placeholder="e.g. Ngombe Circle" style={{ height: 38 }} onKeyDown={e => { if (e.key === 'Enter') createTeam() }} /></div>
                             <Btn size="sm" onClick={createTeam} disabled={!newTeamName.trim()}>Create</Btn>
                           </div>
-                          <FL>Team colour</FL>
-                          <Swatches value={newTeamColor} onChange={setNewTeamColor} />
+                          <FL>Team colour</FL><Swatches value={newTeamColor} onChange={setNewTeamColor} />
                         </div>
                       )}
                       {teams.length === 0 ? (
                         <div style={{ padding: '18px 20px', fontSize: 13, color: T.muted, fontFamily: 'Inter,system-ui,sans-serif' }}>No teams yet. Create a team to group layers by area circle.</div>
                       ) : teams.map(team => {
-                        const tls = boundaryLayers.filter(l => team.layerIds.includes(l.id))
+                        const tls = layers.filter(l => team.layerIds.includes(l.id))
                         const isOpen = teamOpen[team.id] !== false
                         return (
                           <div key={team.id} style={{ borderBottom: `1px solid ${T.border}` }}>
@@ -721,11 +675,8 @@ function AdminContent({ signOut }: { signOut: () => void }) {
                             </div>
                             {isOpen && (
                               <div style={{ paddingBottom: 6 }}>
-                                {tls.length === 0 ? (
-                                  <div style={{ padding: '6px 20px 10px', fontSize: 12, color: T.muted, fontFamily: 'Inter,system-ui,sans-serif' }}>No layers — click Assign on a layer below</div>
-                                ) : tls.map(layer => (
-                                  <LayerRow key={layer.id} {...rowProps(layer)} onAssign={() => setAssignModal({ layerId: layer.id, layerName: layer.name })} onUnassign={() => removeFromTeam(team.id, layer.id)} showUnassign />
-                                ))}
+                                {tls.length === 0 ? <div style={{ padding: '6px 20px 10px', fontSize: 12, color: T.muted, fontFamily: 'Inter,system-ui,sans-serif' }}>No layers — click Assign on a layer below</div>
+                                  : tls.map(layer => <LayerRow key={layer.id} {...rowProps(layer)} onAssign={() => setAssignModal({ layerId: layer.id, layerName: layer.name })} onUnassign={() => removeFromTeam(team.id, layer.id)} showUnassign />)}
                               </div>
                             )}
                           </div>
@@ -739,11 +690,8 @@ function AdminContent({ signOut }: { signOut: () => void }) {
                           <div style={{ width: 13, height: 13, borderRadius: '50%', border: `2px solid ${T.container}`, borderTopColor: T.ink, animation: 'spin 0.8s linear infinite' }} />
                           <span style={{ fontSize: 12, color: T.muted }}>Loading…</span>
                         </div>
-                      ) : ungroupedLayers.length === 0 ? (
-                        <div style={{ padding: '16px 20px', fontSize: 13, color: T.muted, fontFamily: 'Inter,system-ui,sans-serif' }}>All layers are assigned to teams</div>
-                      ) : ungroupedLayers.map(layer => (
-                        <LayerRow key={layer.id} {...rowProps(layer)} onAssign={() => setAssignModal({ layerId: layer.id, layerName: layer.name })} />
-                      ))}
+                      ) : ungroupedLayers.length === 0 ? <div style={{ padding: '16px 20px', fontSize: 13, color: T.muted, fontFamily: 'Inter,system-ui,sans-serif' }}>All layers are assigned to teams</div>
+                        : ungroupedLayers.map(layer => <LayerRow key={layer.id} {...rowProps(layer)} onAssign={() => setAssignModal({ layerId: layer.id, layerName: layer.name })} />)}
                       <div style={{ padding: '8px 20px 12px' }}>
                         <button onClick={loadLayers} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: T.muted, padding: 3, borderRadius: 4, fontFamily: 'Inter,system-ui,sans-serif', transition: 'color 0.1s' }} onMouseEnter={e => e.currentTarget.style.color = T.ink} onMouseLeave={e => e.currentTarget.style.color = T.muted}><IconRefresh size={11} /> Refresh</button>
                       </div>
@@ -753,7 +701,6 @@ function AdminContent({ signOut }: { signOut: () => void }) {
               </div>
             )}
 
-            {/* BUFFER CIRCLES */}
             {active === 'buffers' && (
               <div className="fi">
                 <div style={{ marginBottom: 24 }}>
@@ -783,7 +730,7 @@ function AdminContent({ signOut }: { signOut: () => void }) {
                     </div>
                   </Card>
                   <Card>
-                    <CardHeader title={`Buffer Layers (${bufferLayers.length})`} sub="Kept separate from boundary layers" />
+                    <CardHeader title={`Buffer Layers (${bufferLayers.length})`} sub="Click the colour dot to recolor, pencil to rename" />
                     {layersLoading ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 20px' }}>
                         <div style={{ width: 13, height: 13, borderRadius: '50%', border: `2px solid ${T.container}`, borderTopColor: T.ink, animation: 'spin 0.8s linear infinite' }} />
@@ -792,12 +739,13 @@ function AdminContent({ signOut }: { signOut: () => void }) {
                     ) : bufferLayers.length === 0 ? (
                       <div style={{ padding: '20px', textAlign: 'center', fontSize: 13, color: T.muted, fontFamily: 'Inter,system-ui,sans-serif' }}>No buffer layers yet</div>
                     ) : bufferLayers.map(layer => (
-                      <LayerRow key={layer.id} {...rowProps(layer)} />
+                      <LayerRow key={layer.id} {...bufRowProps(layer)} />
                     ))}
                   </Card>
                 </div>
               </div>
             )}
+
           </div>
         </main>
       </div>

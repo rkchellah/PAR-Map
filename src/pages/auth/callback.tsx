@@ -20,8 +20,19 @@ export default function AuthCallback() {
       try {
         if (code) {
           // PKCE flow: exchange the authorization code for a session
-          const { error } = await supabase.auth.exchangeCodeForSession(code)
-          if (error) throw error
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+
+          if (exchangeError) {
+            // Fallback: some Supabase SDK versions auto-exchange the code before
+            // exchangeCodeForSession is called. Check if a session already exists.
+            if (exchangeError.message?.toLowerCase().includes('code verifier')) {
+              const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+              if (sessionError || !session) throw exchangeError
+              // session was auto-exchanged — fall through to the profile check below
+            } else {
+              throw exchangeError
+            }
+          }
         } else {
           // Implicit flow / email confirmation: session arrives via URL hash.
           // getSession() will parse the fragment and hydrate the session.
