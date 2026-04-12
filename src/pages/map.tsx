@@ -87,6 +87,7 @@ export default function MapPage() {
   const [mapStyle, setMapStyle]       = useState<string>('mapbox/streets-v12')
   const [section, setSection]         = useState<'portfolio' | 'filters' | 'layers' | 'teams' | 'theme' | null>('portfolio')
   const [showBoundaries, setShowBoundaries] = useState<boolean>(true)
+  const [showBufferPins, setShowBufferPins] = useState<boolean>(true)
 
   const [zoom, setZoom]     = useState(13)
   const [pinned, setPinned] = useState(true)
@@ -110,10 +111,12 @@ export default function MapPage() {
       const savedMapStyle   = localStorage.getItem('par-map:mapStyle')
       const savedSection    = localStorage.getItem('par-map:section')
       const savedBoundaries = localStorage.getItem('par-map:showBoundaries')
+      const savedBufPins    = localStorage.getItem('par-map:bufferPins')
       if (savedParFilter  !== null) setParFilter(savedParFilter)
       if (savedMapStyle   !== null) setMapStyle(savedMapStyle)
       if (savedSection    !== null) setSection((savedSection as any) || 'portfolio')
       if (savedBoundaries !== null) setShowBoundaries(savedBoundaries === 'true')
+      if (savedBufPins    !== null) setShowBufferPins(savedBufPins === 'true')
     } catch {}
   }, [])
 
@@ -159,6 +162,7 @@ export default function MapPage() {
   useEffect(() => { try { localStorage.setItem('par-map:section',        section ?? '')       } catch {} }, [section])
   useEffect(() => { try { localStorage.setItem('par-map:parFilter',      parFilter)           } catch {} }, [parFilter])
   useEffect(() => { try { localStorage.setItem('par-map:showBoundaries', String(showBoundaries)) } catch {} }, [showBoundaries])
+  useEffect(() => { try { localStorage.setItem('par-map:bufferPins',     String(showBufferPins))  } catch {} }, [showBufferPins])
 
   const saveLocal = useCallback((layers: KMZLayer[], b64Map: Record<string, string>) => {
     try {
@@ -216,7 +220,7 @@ export default function MapPage() {
       </Head>
 
       <div style={{ position: 'fixed', inset: 0, zIndex: 0 }}>
-        <MapComponent customers={filteredCustomers} kmzLayers={kmzLayers} onKMZDrop={handleKMZDrop} mapStyle={mapStyle} focusedCustomer={focused} onZoomChange={setZoom} showBoundaries={showBoundaries} />
+        <MapComponent customers={filteredCustomers} kmzLayers={kmzLayers} onKMZDrop={handleKMZDrop} mapStyle={mapStyle} focusedCustomer={focused} onZoomChange={setZoom} showBoundaries={showBoundaries} showBufferPins={showBufferPins} />
       </div>
 
       {/* ZOOM PILL */}
@@ -384,6 +388,22 @@ export default function MapPage() {
                   </>
                 )
               })()}
+              {kmzLayers.some(l => l.isBuffer) && (
+                <div style={{ padding: '8px 12px 4px', borderTop: `1px solid ${T.ghost}` }}>
+                  <button
+                    onClick={() => setShowBufferPins(v => !v)}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px', borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', transition: 'background 0.12s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = T.low}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 13 }}>📍</span>
+                      <span style={{ fontSize: 11.5, color: T.variant, fontWeight: 500 }}>Buffer pins</span>
+                    </div>
+                    {showBufferPins ? <IconEye size={14} color={T.variant} /> : <IconEyeOff size={14} color={T.muted} />}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
