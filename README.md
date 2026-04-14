@@ -1,31 +1,52 @@
-# PAR Map - Interactive Geospatial Dashboard
+# PAR Map — Field Intelligence Dashboard
 
-> High-performance loan portfolio visualisation and territory management for field teams in Lusaka, Zambia.
+> Interactive geospatial dashboard for visualising loan portfolio health and managing field collection teams.
 
-Built with **Next.js 15** and **Supabase** — designed for real-time PAR status tracking, boundary layer management, and field-ready geographic intelligence.
+Built with **Next.js 15** and **Supabase** — designed for fintech and clean energy companies that need real-time PAR status tracking, boundary layer management, and geographic field intelligence.
+
+---
+
+## What It Does
+
+Field collection teams need to know where to go and who to visit first. PAR Map solves that by putting every customer on a map, colour-coded by how overdue they are, with boundary overlays showing territory assignments and buffer zones around key locations.
+
+This is a demo version using anonymised dummy data. The production version runs weekly with live portfolio exports from a loan management system.
 
 ---
 
 ## Design System: Luminous Curator
 
-A professional, high-contrast light-mode theme built for field visibility:
+A high-contrast light-mode theme built for field visibility in high-glare environments:
 
 | Principle | Implementation |
 |-----------|---------------|
-| **Clarity** | Tonal sidebars and glassmorphic navbar — metrics scannable in high-glare environments |
-| **Typography** | `Manrope` for map UI · `Inter` for admin tasks · `DM Mono` for technical data |
-| **Status Encoding** | Color-coded markers by PAR bucket · Priority Visit flags with red dot + yellow ring |
+| **Clarity** | Tonal sidebars and glassmorphic navbar |
+| **Typography** | `Manrope` for map UI · `Inter` for admin · `DM Mono` for data values |
+| **Status Encoding** | Colour-coded markers by PAR bucket · Priority Visit flags with red dot + yellow ring |
 
 ---
 
 ## Features
 
-- **Real-Time Portfolio Tracking** - Monitor On-Time and At-Risk (PAR 1-30 through PAR 90+) metrics across areas including Chilenje, Matero, Ngombe, Kanyama, and more
-- **Advanced Layer Management** - Upload, rename, recolor, and lock KMZ / KML / GeoJSON boundary layers
-- **Buffer Circle Generator** - Create geodesic polygons (e.g. 1 km / 2 km warehouse buffers) from CSV coordinates
-- **Team Grouping** - Assign boundary layers to area circle field teams
-- **Role-Based Access** - `/admin` dashboard protected by Supabase Auth + middleware route guards
-- **High Performance** - Canvas renderer (`preferCanvas: true`) handles thousands of markers smoothly on mobile and desktop
+- **Real-Time Portfolio Tracking** — Monitor On-Time and At-Risk customers (PAR 1-30 through PAR 90+) across geographic areas
+- **Advanced Layer Management** — Upload, rename, recolor, and lock KMZ / KML / GeoJSON boundary layers
+- **Buffer Circle Generator** — Create geodesic polygons (e.g. 1km / 2km radius buffers) from CSV coordinates
+- **Team Grouping** — Assign boundary layers to named field teams
+- **Role-Based Access** — `/admin` dashboard protected by Supabase Auth + middleware route guards
+- **High Performance** — Canvas renderer handles thousands of markers smoothly on mobile and low-bandwidth connections
+- **Priority Visit Flags** — Automatically surfaces the highest-risk customers for immediate action
+
+---
+
+## PAR Status Colour Reference
+
+| Status | Colour | Meaning |
+|--------|--------|---------|
+| ONTIME | 🟢 Green | Current — no arrears |
+| PAR 1-30 | 🟡 Yellow-Green | 1–30 days past due |
+| PAR 31-60 | 🟠 Amber | 31–60 days past due |
+| PAR 61-90 | 🔴 Orange-Red | 61–90 days past due |
+| PAR 90+ | 🔴 Deep Red | 90+ days past due — critical |
 
 ---
 
@@ -42,71 +63,67 @@ A professional, high-contrast light-mode theme built for field visibility:
 
 ---
 
-## Project Structure
+## Getting Started
 
-```
-src/
-├── components/
-│   ├── Map.tsx              # Dynamic Leaflet map (SSR disabled, canvas renderer)
-│   └── NavIcons.tsx         # Luminous UI icon components
-├── lib/
-│   ├── supabase.ts          # Browser client + server admin client
-│   ├── useAuth.ts           # Auth hook with profile fetch + race condition fix
-│   ├── layerService.ts      # KMZ layer persistence and visibility logic
-│   └── customerService.ts   # Paginated customer fetch + DB sync
-├── pages/
-│   ├── index.tsx            # Main map page
-│   ├── admin.tsx            # Admin dashboard (auth-guarded)
-│   ├── login.tsx            # Email auth
-│   └── auth/callback.tsx    # OAuth PKCE exchange handler
-├── utils/
-│   └── kmzParser.ts         # Client-side KMZ/KML/GeoJSON conversion
-├── types/
-│   └── par.ts               # Customer interface, PAR colors, stats helpers
-└── middleware.ts             # Edge middleware — session cookie + route protection
-```
+### 1. Clone the repo
 
----
-
-## Environment Variables
-
-Create a `.env.local` file in the project root:
-
-```env
-NEXT_PUBLIC_MAPBOX_TOKEN=pk.eyJ1...
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbG...
-SUPABASE_SERVICE_ROLE_KEY=eyJhbG...        # Server-only — never expose to browser
-```
-
----
-
-## Setup & Deployment
-
-### 1. Install dependencies
 ```bash
+git clone https://github.com/rkchellah/Map.git
+cd Map
 npm install
 ```
 
-### 2. Run database migrations
+### 2. Set up Supabase
 
-Execute the following in your **Supabase SQL Editor** (in order):
+Create a new project at [supabase.com](https://supabase.com) and run the following migrations in your Supabase SQL Editor:
 
 ```sql
--- 1. User profiles + role system
-CREATE TABLE profiles ( ... );
+-- User profiles + role system
+CREATE TABLE profiles (
+  id uuid REFERENCES auth.users ON DELETE CASCADE,
+  full_name text,
+  role text DEFAULT 'user',
+  avatar_url text,
+  PRIMARY KEY (id)
+);
 
--- 2. KMZ boundary layers
-CREATE TABLE kmz_layers ( ... );
+-- KMZ boundary layers
+CREATE TABLE kmz_layers (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  name text NOT NULL,
+  color text DEFAULT '#4a4bd7',
+  locked boolean DEFAULT false,
+  visible boolean DEFAULT true,
+  file_path text,
+  team_id uuid,
+  created_at timestamptz DEFAULT now()
+);
 
--- 3. Customer PAR data
-CREATE TABLE customers ( ... );
+-- Customer PAR data
+CREATE TABLE customers (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  customer text,
+  contract_reference text,
+  gender text,
+  area text,
+  par_category text,
+  par_status text,
+  latitude float,
+  longitude float,
+  contact_number text,
+  last_purchase_date date,
+  days_since_last_purchase int,
+  is_priority_visit boolean DEFAULT false,
+  created_at timestamptz DEFAULT now()
+);
 
--- 4. Teams
-CREATE TABLE teams ( ... );
+-- Teams
+CREATE TABLE teams (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  name text NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
 ```
-
-> Full migration scripts are in `/supabase/migrations/`.
 
 ### 3. Create a storage bucket
 
@@ -118,30 +135,43 @@ In your Supabase dashboard → **Storage** → create a public bucket named `kmz
 UPDATE profiles SET role = 'admin' WHERE id = 'your-user-uuid-here';
 ```
 
-### 5. Deploy to Vercel
+### 5. Set environment variables
 
-Connect your repository to Vercel and add all four environment variables from `.env.local` to your project settings. Pushes to `main` deploy automatically.
+Create a `.env.local` file in the project root:
+
+```env
+NEXT_PUBLIC_MAPBOX_TOKEN=pk.eyJ1...
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbG...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbG...
+```
+
+### 6. Run locally
+
+```bash
+npm run dev
+```
+
+### 7. Deploy to Vercel
+
+Connect your repository to Vercel and add all four environment variables. Pushes to `main` deploy automatically.
 
 ---
 
-## Weekly Data Update Workflow
+## Demo Data
 
-1. Export the latest PAR CSV from your loan management system (PayGops / internal export)
+This repo ships with anonymised dummy data covering realistic PAR structures across Lusaka. All customer names, phone numbers, and locations are fictional.
+
+To load your own data: log into the Admin Portal → Customer Data → upload your PAR CSV.
+
+---
+
+## Weekly Data Update Workflow (Production)
+
+1. Export the latest PAR CSV from your loan management system
 2. Log in to the **Admin Portal** → Customer Data
 3. Drop the CSV into the upload zone and click **Sync to Database**
-4. The map reloads automatically — new markers, updated PAR buckets, and refreshed portfolio stats
-
----
-
-## PAR Status Colour Reference
-
-| Status | Color | Meaning |
-|--------|-------|---------|
-| ONTIME | 🟢 Green | Current — no arrears |
-| PAR 1-30 | 🟡 Yellow-Green | 1–30 days past due |
-| PAR 31-60 | 🟠 Amber | 31–60 days past due |
-| PAR 61-90 | 🔴 Orange-Red | 61–90 days past due |
-| PAR 90+ | 🔴 Deep Red | 90+ days past due — critical |
+4. The map reloads automatically with updated markers and portfolio stats
 
 ---
 
@@ -155,6 +185,14 @@ Connect your repository to Vercel and add all four environment variables from `.
 
 ---
 
+## Project Background
+
+Built as an internal field intelligence tool for a clean energy company managing a loan portfolio across Zambia. Grew from a QGIS-based static map into a full web application after the field team needed real-time updates and mobile access.
+
+Submitted to [Hack Trek 2026](https://devpost.com) as part of an ongoing portfolio of production tools built at the intersection of data and software.
+
+---
+
 ## Author
 
-**Chella Kamina**
+**Chella Kamina** — [GitHub](https://github.com/rkchellah) · [LinkedIn](https://linkedin.com/in/rkchellah) · [Dev.to](https://dev.to/rkchellah)

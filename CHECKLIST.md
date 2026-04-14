@@ -95,5 +95,5 @@
 - [x] `supabase.ts` — lazy `getSupabaseAdmin()` (server-only, never in browser)
 - [x] GitHub repo pushed (`.env.local` gitignored)
 - [ ] `.env.local` populated with real Supabase URL and keys
-- [ ] Login redirect loop resolved (middleware cookie name verified)
+- [x] Login redirect loop resolved (middleware cookie name verified)
 - [ ] Deployed to Vercel with env vars set

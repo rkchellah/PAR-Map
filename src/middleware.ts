@@ -4,6 +4,11 @@ import { NextResponse, type NextRequest } from 'next/server'
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
+  const projectRef = process.env.NEXT_PUBLIC_SUPABASE_URL
+    ?.split('https://')[1]
+    ?.split('.supabase.co')[0]
+  const cookieName = `sb-${projectRef}-auth-token`
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -19,6 +24,9 @@ export async function middleware(request: NextRequest) {
             supabaseResponse.cookies.set(name, value, options)
           )
         },
+      },
+      cookieOptions: {
+        name: cookieName,
       },
     }
   )

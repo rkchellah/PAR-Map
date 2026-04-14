@@ -423,7 +423,17 @@ function AdminContent({ signOut }: { signOut: () => void }) {
         Object.keys(row).forEach(k => { r[k.toLowerCase().trim()] = row[k] })
         const lat = parseFloat(r['latitude']), lon = parseFloat(r['longitude'])
         if (!r['latitude'] || !r['longitude'] || isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || Math.abs(lat) > 90 || Math.abs(lon) > 180) { skipped++; continue }
-        rows.push({ contract_ref: r['contract reference'] || r['code'] || '', name: r['name'] ?? '', phone: formatPhone(r['phone'] ?? ''), phone2: formatPhone(r['phone 2'] ?? ''), area: r['area'] ?? '', par_status: r['par status'] ?? '', lead_generate: r['lead generate'] ?? '', lead_generate_name: r['lead generator name'] ?? '', latitude: lat, longitude: lon })
+        rows.push({
+          customer: r['name'] ?? '',
+          contract_reference: r['contract reference'] || r['code'] || '',
+          area: r['area'] ?? '',
+          par_status: r['par status'] ?? '',
+          contact_number: formatPhone(r['phone'] ?? ''),
+          alt_contact_number: formatPhone(r['phone 2'] ?? ''),
+          latitude: lat,
+          longitude: lon,
+          is_priority_visit: false,
+        })
       }
       try {
         await syncCustomers(rows)
