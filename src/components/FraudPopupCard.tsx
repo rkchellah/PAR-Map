@@ -66,7 +66,7 @@ export const FraudPopupCard: React.FC<FraudPopupCardProps> = ({ check, narration
             {/* Fields */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {[
-                    { label: 'Area', value: check.agent_location },
+                    { label: 'Location', value: check.agent_location },
                     { label: 'Checked', value: formatTime(check.checked_at) },
                 ].map((row, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>

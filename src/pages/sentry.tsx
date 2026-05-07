@@ -111,10 +111,13 @@ export default function SentryPage() {
             if (!res.ok) throw new Error('Check failed')
             const raw = await res.json()
 
-            const coords = LUSAKA_COORDS[raw.agent_location] ?? LUSAKA_COORDS['Unknown']
+            // Ensure the location matches what the user selected if backend didn't specify
+            const loc = raw.agent_location || checkLocation
+            const coords = LUSAKA_COORDS[loc] ?? LUSAKA_COORDS['Unknown']
             const jitter = () => (Math.random() - 0.5) * 0.012
             const newCheck: FraudCheck = {
                 ...raw,
+                agent_location: loc,
                 latitude: coords.lat + jitter(),
                 longitude: coords.lng + jitter()
             }
@@ -197,6 +200,8 @@ export default function SentryPage() {
           .leaflet-popup{margin-bottom:35px!important;z-index:1000!important;}
           .par-popup .leaflet-popup-content{margin:0!important;width:280px!important;min-height:100px;line-height:inherit!important;display:block!important;}
           .par-popup .leaflet-popup-tip-container{width:40px;height:20px;position:absolute;left:50%;margin-left:-20px;overflow:hidden;pointer-events:none;background:none;}
+          .leaflet-popup-close-button{top:14px!important;right:14px!important;color:${T.muted}!important;font-size:16px!important;font-weight:300!important;}
+          .leaflet-popup-close-button:hover{color:#111!important;background:none!important;}
           @keyframes spin{to{transform:rotate(360deg);}}
           @keyframes slideDown{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}
         `}</style>
