@@ -7,11 +7,11 @@
 // PAR statuses → SAFE / CAUTION / STOP
 // customers → fraud checks
 
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import Head from 'next/head'
 
-import { FraudCheck, FraudStats, computeFraudStats, VERDICT_COLORS, VERDICT_TO_PAR } from '../types/sentry'
+import { FraudCheck, FraudStats, computeFraudStats, VERDICT_COLORS, VERDICT_TO_PAR, LUSAKA_COORDS } from '../types/sentry'
 import { FraudPopupCard } from '../components/FraudPopupCard'
 import { getFraudChecks } from '../lib/fraudService'
 import { useAuth } from '../lib/useAuth'
@@ -55,6 +55,12 @@ const MAP_STYLES = [
     { id: 'satellite', label: 'Satellite', style: 'mapbox/satellite-streets-v12' },
 ]
 
+const LOCATIONS = [
+    'Cairo Road Shoprite', 'City Market', 'Down Town Lusaka', 'Mtendere Market',
+    'Lumumba Road', 'Town Centre Lusaka', 'Chilenje Market', 'Kalingalinga',
+    'Chibolya', 'Kanyama', 'Other'
+]
+
 // Convert FraudCheck to Customer shape so the existing Map component
 // renders markers without any modifications.
 // Verdict maps to par_status so PAR_COLORS picks the right colour.
@@ -86,6 +92,43 @@ export default function SentryPage() {
     const [pinned, setPinned] = useState(true)
     const [hovered, setHovered] = useState(false)
     const hoverRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const [showCheckForm, setShowCheckForm] = useState(false)
+    const [checkPhone, setCheckPhone] = useState('')
+    const [checkLocation, setCheckLocation] = useState(LOCATIONS[0])
+    const [checking, setChecking] = useState(false)
+
+    const handleCheck = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!checkPhone || checking) return
+        setChecking(true)
+        try {
+            const apiBase = process.env.NEXT_PUBLIC_MOMO_SENTRY_API ?? "https://momo-sentry-production.up.railway.app"
+            const res = await fetch(`${apiBase}/check`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone_number: checkPhone, location: checkLocation })
+            })
+            if (!res.ok) throw new Error('Check failed')
+            const raw = await res.json()
+
+            const coords = LUSAKA_COORDS[raw.agent_location] ?? LUSAKA_COORDS['Unknown']
+            const jitter = () => (Math.random() - 0.5) * 0.012
+            const newCheck: FraudCheck = {
+                ...raw,
+                latitude: coords.lat + jitter(),
+                longitude: coords.lng + jitter()
+            }
+
+            setChecks(prev => [newCheck, ...prev])
+            setCheckPhone('')
+            setShowCheckForm(false)
+        } catch (err) {
+            console.error(err)
+            alert('Failed to perform fraud check')
+        } finally {
+            setChecking(false)
+        }
+    }
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
@@ -155,6 +198,7 @@ export default function SentryPage() {
           .par-popup .leaflet-popup-content{margin:0!important;width:280px!important;min-height:100px;line-height:inherit!important;display:block!important;}
           .par-popup .leaflet-popup-tip-container{width:40px;height:20px;position:absolute;left:50%;margin-left:-20px;overflow:hidden;pointer-events:none;background:none;}
           @keyframes spin{to{transform:rotate(360deg);}}
+          @keyframes slideDown{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}
         `}</style>
             </Head>
 
@@ -187,18 +231,56 @@ export default function SentryPage() {
             </div>
 
             {/* NAVBAR */}
-            <nav style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 52, zIndex: 1000, background: 'rgba(255,255,255,0.90)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderBottom: `1px solid ${T.ghost}`, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 16 }}>
+            <nav style={{ position: 'fixed', top: 0, left: 0, right: 0, minHeight: 52, zIndex: 1000, background: 'rgba(255,255,255,0.90)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderBottom: `1px solid ${T.ghost}`, display: 'flex', alignItems: 'center', padding: '8px 20px', gap: 16 }}>
                 <NavLogo />
-                <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', maxWidth: 460, height: 34, background: T.low, borderRadius: 9, padding: '0 14px', cursor: 'text', transition: 'box-shadow 0.15s' }}
-                        onFocus={e => e.currentTarget.style.boxShadow = `0 0 0 2px ${T.primaryRing}`}
-                        onBlur={e => e.currentTarget.style.boxShadow = 'none'}>
-                        <div style={{ color: T.muted }}><IconSearch /></div>
-                        <input value={search} onChange={e => setSearch(e.target.value)}
-                            placeholder="Search phone number or area…"
-                            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 12.5, color: T.onSurface, fontFamily: 'Manrope' }} />
-                        {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.muted, padding: 0, display: 'flex' }}><IconX size={11} /></button>}
-                    </label>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', justifyContent: 'center' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', maxWidth: 460, height: 34, background: T.low, borderRadius: 9, padding: '0 14px', cursor: 'text', transition: 'box-shadow 0.15s' }}
+                            onFocus={e => e.currentTarget.style.boxShadow = `0 0 0 2px ${T.primaryRing}`}
+                            onBlur={e => e.currentTarget.style.boxShadow = 'none'}>
+                            <div style={{ color: T.muted }}><IconSearch /></div>
+                            <input value={search} onChange={e => setSearch(e.target.value)}
+                                placeholder="Search phone number or area…"
+                                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 12.5, color: T.onSurface, fontFamily: 'Manrope' }} />
+                            {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.muted, padding: 0, display: 'flex' }}><IconX size={11} /></button>}
+                        </label>
+                        <button onClick={() => setShowCheckForm(!showCheckForm)}
+                            style={{
+                                height: 34, padding: '0 16px', borderRadius: 9,
+                                background: showCheckForm ? '#111' : T.primary,
+                                color: '#fff', border: 'none', fontSize: 12, fontWeight: 700,
+                                cursor: 'pointer', transition: 'all 0.15s',
+                                display: 'flex', alignItems: 'center', gap: 6,
+                                boxShadow: showCheckForm ? 'none' : '0 2px 8px rgba(74,75,215,0.25)'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                            onMouseLeave={e => e.currentTarget.style.transform = 'none'}>
+                            {checking ? 'Checking…' : 'Check Number'}
+                        </button>
+                    </div>
+
+                    {showCheckForm && (
+                        <form onSubmit={handleCheck} style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            padding: '10px 14px', background: T.card, borderRadius: 12,
+                            marginTop: 10, boxShadow: T.shadow,
+                            animation: 'slideDown 0.2s cubic-bezier(0.4,0,0.2,1)',
+                            border: `1px solid ${T.ghost}`
+                        }}>
+                            <input value={checkPhone} onChange={e => setCheckPhone(e.target.value)}
+                                placeholder="Phone number"
+                                required
+                                style={{ width: 140, height: 32, background: T.low, border: 'none', borderRadius: 6, padding: '0 10px', fontSize: 12, outline: 'none', fontFamily: 'Manrope' }} />
+                            <select value={checkLocation} onChange={e => setCheckLocation(e.target.value)}
+                                style={{ height: 32, background: T.low, border: 'none', borderRadius: 6, padding: '0 8px', fontSize: 12, outline: 'none', fontFamily: 'Manrope', cursor: 'pointer' }}>
+                                {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                            </select>
+                            <button type="submit" disabled={checking}
+                                style={{ height: 32, padding: '0 14px', background: T.primary, color: '#fff', border: 'none', borderRadius: 6, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', opacity: checking ? 0.6 : 1 }}>
+                                {checking ? '...' : 'Check'}
+                            </button>
+                        </form>
+                    )}
                 </div>
                 <div style={{ width: 200, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>
                     <div style={{ fontFamily: 'DM Mono', fontSize: 10.5, color: T.onSurface, fontWeight: 600 }}>{filtered.length.toLocaleString()} Checks</div>
