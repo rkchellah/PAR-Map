@@ -615,7 +615,7 @@ function AdminContent({ signOut }: { signOut: () => void }) {
                             <Dot color={PAR_COLORS[c.par_status] ?? '#ccc'} />
                             {isPriorityVisit(c) && <IconAlertCircle size={10} color={T.error} />}
                           </div>
-                          <span style={{ fontSize: 11, fontFamily: 'DM Mono', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: T.ink }}>{c.customer ?? c.contract_ref}</span>
+                          <span style={{ fontSize: 11, fontFamily: 'DM Mono', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: T.ink }}>{c.name ?? c.contract_ref}</span>
                           <span style={{ fontSize: 11, color: T.muted, flexShrink: 0, marginRight: 6 }}>{c.area}</span>
                           <span style={{ ...parBadgeStyle(c.par_status), fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0, padding: '2px 7px', borderRadius: 4, fontFamily: 'DM Mono' }}>{c.par_status}</span>
                         </div>

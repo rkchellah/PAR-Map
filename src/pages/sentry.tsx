@@ -7,14 +7,13 @@
 // PAR statuses → SAFE / CAUTION / STOP
 // customers → fraud checks
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import Head from 'next/head'
 
 import { FraudCheck, FraudStats, computeFraudStats, VERDICT_COLORS, VERDICT_TO_PAR } from '../types/sentry'
 import { FraudPopupCard } from '../components/FraudPopupCard'
 import { getFraudChecks } from '../lib/fraudService'
-import { generateNarration } from '../lib/groqAgent'
 import { useAuth } from '../lib/useAuth'
 import { NavLogo, IconAdmin, IconSearch, IconX } from '../components/NavIcons'
 import {
@@ -87,22 +86,6 @@ export default function SentryPage() {
     const [pinned, setPinned] = useState(true)
     const [hovered, setHovered] = useState(false)
     const hoverRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-    const [narrations, setNarrations] = useState<Map<string, string>>(new Map())
-    const requestedRef = useRef<Set<string>>(new Set())
-
-    const requestNarration = useCallback((check: FraudCheck) => {
-        if (requestedRef.current.has(check.id)) return
-        requestedRef.current.add(check.id)
-        setTimeout(() => {
-            setNarrations(prev => new Map(prev).set(check.id, ''))
-            generateNarration(check)
-                .then(text => setNarrations(m => new Map(m).set(check.id, text)))
-                .catch(() => {
-                    requestedRef.current.delete(check.id)
-                    setNarrations(m => { const x = new Map(m); x.delete(check.id); return x })
-                })
-        }, 0)
-    }, [])
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
@@ -189,11 +172,7 @@ export default function SentryPage() {
                     renderPopup={(customer) => {
                         const check = checksById.get(customer.contract_ref)
                         if (!check) return <div style={{ padding: 16 }}>{customer.phone}</div>
-                        if (!check.narration && !requestedRef.current.has(check.id)) {
-                            requestNarration(check)
-                        }
-                        const narration = narrations.get(check.id) ?? (check.narration || undefined)
-                        return <FraudPopupCard check={check} narration={narration} />
+                        return <FraudPopupCard check={check} narration={check.narration || undefined} />
                     }}
                 />
             </div>

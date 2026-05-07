@@ -1,5 +1,6 @@
 // src/types/sentry.ts
 // Types for MoMo Sentry fraud checks
+import type { PARStatus } from './par'
 
 export type Verdict = 'SAFE' | 'CAUTION' | 'STOP'
 
@@ -59,7 +60,7 @@ export const LUSAKA_COORDS: Record<string, { lat: number; lng: number }> = {
 
 // Verdict colours — maps directly to PAR_COLORS keys
 // so the existing Map component renders them without any changes
-export const VERDICT_TO_PAR: Record<Verdict, string> = {
+export const VERDICT_TO_PAR: Record<Verdict, PARStatus> = {
     'SAFE': 'ONTIME',    // green
     'CAUTION': 'PAR 31-60', // amber
     'STOP': 'PAR 90+',   // deep red
