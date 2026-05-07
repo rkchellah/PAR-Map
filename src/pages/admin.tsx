@@ -387,8 +387,8 @@ function AdminContent({ signOut }: { signOut: () => void }) {
 
   function downloadTemplate() {
     const csv = [
-      'Contract Reference,Name,Area,Latitude,Longitude,PAR Status,Phone,Phone 2,Lead Generate,Lead Generator Name',
-      'ECS-0001,Customer Name,Area Name,-15.3580,28.3250,ONTIME,+260970000000,,CP001,Agent Name'
+      'customer,contract_ref,area,latitude,longitude,par_status,contact_number,alt_contact_number',
+      'Jane Banda,CTY0001234,Kabanana,-15.382,28.271,ONTIME,+260970000000,+260960000000'
     ].join('\n')
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
@@ -423,7 +423,21 @@ function AdminContent({ signOut }: { signOut: () => void }) {
         Object.keys(row).forEach(k => { r[k.toLowerCase().trim()] = row[k] })
         const lat = parseFloat(r['latitude']), lon = parseFloat(r['longitude'])
         if (!r['latitude'] || !r['longitude'] || isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || Math.abs(lat) > 90 || Math.abs(lon) > 180) { skipped++; continue }
-        rows.push({ contract_ref: r['contract reference'] || r['code'] || '', name: r['name'] ?? '', phone: formatPhone(r['phone'] ?? ''), phone2: formatPhone(r['phone 2'] ?? ''), area: r['area'] ?? '', par_status: r['par status'] ?? '', lead_generate: r['lead generate'] ?? '', lead_generate_name: r['lead generator name'] ?? '', latitude: lat, longitude: lon })
+        rows.push({
+          customer: r['customer'] ?? r['name'] ?? '',
+          contract_ref: r['contract_ref'] || r['contract reference'] || r['code'] || '',
+          area: r['area'] ?? '',
+          par_status: r['par_status'] || r['par status'] || '',
+          par_category: r['par_category'] || r['par category'] || '',
+          arrears_total_days: parseInt(r['arrears_total_days'] || '0') || 0,
+          last_purchase_date: r['last_purchase_date'] || r['last purchase date'] || null,
+          days_since_last_purchase: parseInt(r['days_since_last_purchase'] || '0') || 0,
+          contact_number: formatPhone((r['contact_number'] || r['phone']) ?? ''),
+          alt_contact_number: formatPhone((r['alt_contact_number'] || r['phone 2']) ?? ''),
+          is_priority_visit: r['is_priority_visit'] === 'true',
+          latitude: lat,
+          longitude: lon,
+        })
       }
       try {
         await syncCustomers(rows)
@@ -488,10 +502,8 @@ function AdminContent({ signOut }: { signOut: () => void }) {
         `}</style>
       </Head>
 
-      {/* Onboarding guide — first visit only */}
       <OnboardingGuide />
 
-      {/* Assign modal */}
       {assignModal && (
         <div onClick={e => { if (e.target === e.currentTarget) setAssignModal(null) }}
           style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -579,7 +591,7 @@ function AdminContent({ signOut }: { signOut: () => void }) {
                         <p style={{ fontSize: 12, color: T.muted, marginTop: 7 }}>Template has dummy data — replace with your export</p>
                       </div>
                       <DZ file={parCsv} label="Drop .csv file here" hint="CSV only" accept=".csv" id="par-csv" onSel={onParCsvSelect} />
-                      {prev3.length > 0 && <PrevTable data={prev3} cols={['contract reference', 'area', 'par status']} />}
+                      {prev3.length > 0 && <PrevTable data={prev3} cols={['customer', 'area', 'par_status']} />}
                       <Btn onClick={handleGenerateCustomers} disabled={!parCsv}><IconUpload size={14} /> Sync to Database</Btn>
                       <StatusMsg s={parStatus} />
                       <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 14, marginTop: 4 }}>
@@ -603,7 +615,7 @@ function AdminContent({ signOut }: { signOut: () => void }) {
                             <Dot color={PAR_COLORS[c.par_status] ?? '#ccc'} />
                             {isPriorityVisit(c) && <IconAlertCircle size={10} color={T.error} />}
                           </div>
-                          <span style={{ fontSize: 11, fontFamily: 'DM Mono', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: T.ink }}>{c.contract_ref}</span>
+                          <span style={{ fontSize: 11, fontFamily: 'DM Mono', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: T.ink }}>{c.name ?? c.contract_ref}</span>
                           <span style={{ fontSize: 11, color: T.muted, flexShrink: 0, marginRight: 6 }}>{c.area}</span>
                           <span style={{ ...parBadgeStyle(c.par_status), fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0, padding: '2px 7px', borderRadius: 4, fontFamily: 'DM Mono' }}>{c.par_status}</span>
                         </div>

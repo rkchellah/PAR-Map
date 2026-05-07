@@ -13,7 +13,13 @@ let _supabase: ReturnType<typeof createBrowserClient> | null = null
 
 export function getSupabase() {
   if (!_supabase) {
-    _supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON)
+    const projectRef = SUPABASE_URL?.split('https://')[1]?.split('.supabase.co')[0]
+    const cookieName = `sb-${projectRef}-auth-token`
+    _supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON, {
+      cookieOptions: {
+        name: cookieName,
+      },
+    })
   }
   return _supabase
 }

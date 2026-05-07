@@ -21,6 +21,7 @@ interface MapProps {
   onZoomChange?: (zoom: number) => void
   showBoundaries?: boolean
   showBufferPins?: boolean
+  renderPopup?: (customer: Customer) => React.ReactNode
 }
 
 function polygonCentroid(coords: [number, number][]): [number, number] {
@@ -97,6 +98,7 @@ export default function Map({
   customers, kmzLayers, onKMZDrop, mapStyle,
   focusedCustomer, onZoomChange,
   showBoundaries = true, showBufferPins = true,
+  renderPopup,
 }: MapProps) {
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -121,11 +123,13 @@ export default function Map({
           bubblingMouseEvents={false}
           renderer={renderer}
         >
-          <Popup className="par-popup"><PopupCard customer={customer} /></Popup>
+          <Popup className="par-popup">
+            {renderPopup ? renderPopup(customer) : <PopupCard customer={customer} />}
+          </Popup>
         </CircleMarker>
       )
     })
-  }, [customers])
+  }, [customers, renderPopup])
 
   return (
     <div style={{ height: '100%', width: '100%' }} onDrop={handleDrop} onDragOver={handleDragOver}>

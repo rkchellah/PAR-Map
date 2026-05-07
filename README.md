@@ -1,160 +1,98 @@
-# PAR Map - Interactive Geospatial Dashboard
+# PAR Map
 
-> High-performance loan portfolio visualisation and territory management for field teams in Lusaka, Zambia.
+One of my responsibilities at work involves territory management and loan portfolio tracking for a field team operating across Lusaka. For a long time that meant spreadsheets, Google Maps links shared over WhatsApp, and area circle boundaries that existed only in people's heads.
 
-Built with **Next.js 15** and **Supabase** — designed for real-time PAR status tracking, boundary layer management, and field-ready geographic intelligence.
+I needed something I could actually use. So I built it.
 
----
+The first version was hand-drawn polygons on Google Maps. It worked well enough to show the concept but wasn't something I could maintain or share reliably. Then I tried QGIS — better output quality but required everyone to have it installed. Then a Python script that took coordinates copied from Google Maps and generated KMZ files for Google Earth. Three tools, three workflows, all friction.
 
-## Design System: Luminous Curator
+After three hackathons where I was learning how to build proper web apps, I had enough to build something real. A map in a browser. Anyone opens it, logs in, sees what they need. No installs, no lost access.
 
-A professional, high-contrast light-mode theme built for field visibility:
+Around the same time I was sending PAR reports by email. Some people on the team didn't use Excel confidently. I thought if I'm building the territory map anyway I might as well put the portfolio data on the same map. One tool instead of two.
 
-| Principle | Implementation |
-|-----------|---------------|
-| **Clarity** | Tonal sidebars and glassmorphic navbar — metrics scannable in high-glare environments |
-| **Typography** | `Manrope` for map UI · `Inter` for admin tasks · `DM Mono` for technical data |
-| **Status Encoding** | Color-coded markers by PAR bucket · Priority Visit flags with red dot + yellow ring |
+It worked. My manager liked it.
 
 ---
 
-## Features
+## What it does
 
-- **Real-Time Portfolio Tracking** - Monitor On-Time and At-Risk (PAR 1-30 through PAR 90+) metrics across areas including Chilenje, Matero, Ngombe, Kanyama, and more
-- **Advanced Layer Management** - Upload, rename, recolor, and lock KMZ / KML / GeoJSON boundary layers
-- **Buffer Circle Generator** - Create geodesic polygons (e.g. 1 km / 2 km warehouse buffers) from CSV coordinates
-- **Team Grouping** - Assign boundary layers to area circle field teams
-- **Role-Based Access** - `/admin` dashboard protected by Supabase Auth + middleware route guards
-- **High Performance** - Canvas renderer (`preferCanvas: true`) handles thousands of markers smoothly on mobile and desktop
+Log in and see Lusaka. Every customer is a dot coloured by PAR status — green is on time, the deeper the red the more overdue. Filter by status, search by name or number, see territory boundaries on the same map.
+
+Upload a PAR CSV weekly. The map updates. No Excel, no email.
 
 ---
 
-## Tech Stack
+## MoMo Sentry integration
+
+The `/sentry` page is part of a separate project — MoMo Sentry — built for the Africa Ignite Hackathon 2026. It uses the same Supabase project and the same Lusaka map to plot fraud check results from mobile money booth agents.
+
+Same city, same infrastructure, different problem.
+
+MoMo Sentry: https://github.com/rkchellah/MoMo-Sentry
+
+---
+
+## Tech stack
 
 | Layer | Technology |
-|-------|------------|
+|---|---|
 | Framework | Next.js 15 (Pages Router) |
-| Database & Auth | Supabase (PostgreSQL + RLS) |
-| Mapping | Mapbox GL + Leaflet + React-Leaflet v5 |
-| File Parsing | JSZip (KMZ) · PapaParse (CSV) · DOMParser (KML) |
-| Styling | Tailwind CSS + Luminous Design Tokens |
+| Database | Supabase (PostgreSQL + RLS) |
+| Map | Mapbox + Leaflet + React-Leaflet |
+| File parsing | JSZip (KMZ), PapaParse (CSV) |
 | Deployment | Vercel |
 
 ---
 
-## Project Structure
+## Project structure
 
 ```
 src/
 ├── components/
-│   ├── Map.tsx              # Dynamic Leaflet map (SSR disabled, canvas renderer)
-│   └── NavIcons.tsx         # Luminous UI icon components
+│   ├── Map.tsx              # Leaflet map — canvas renderer for performance
+│   ├── PopupCard.tsx        # Customer detail popup
+│   ├── FraudPopupCard.tsx   # Fraud check popup (MoMo Sentry)
+│   └── NavIcons.tsx         # Icon components
 ├── lib/
-│   ├── supabase.ts          # Browser client + server admin client
-│   ├── useAuth.ts           # Auth hook with profile fetch + race condition fix
-│   ├── layerService.ts      # KMZ layer persistence and visibility logic
-│   └── customerService.ts   # Paginated customer fetch + DB sync
+│   ├── supabase.ts          # Supabase client
+│   ├── useAuth.ts           # Auth hook
+│   ├── layerService.ts      # KMZ layer persistence
+│   ├── customerService.ts   # Customer data fetch
+│   └── fraudService.ts      # Fraud checks fetch (MoMo Sentry)
 ├── pages/
-│   ├── index.tsx            # Main map page
-│   ├── admin.tsx            # Admin dashboard (auth-guarded)
-│   ├── login.tsx            # Email auth
-│   └── auth/callback.tsx    # OAuth PKCE exchange handler
-├── utils/
-│   └── kmzParser.ts         # Client-side KMZ/KML/GeoJSON conversion
+│   ├── index.tsx            # PAR portfolio map
+│   ├── sentry.tsx           # Fraud detection map (MoMo Sentry)
+│   ├── admin.tsx            # Admin dashboard
+│   └── login.tsx            # Auth
 ├── types/
-│   └── par.ts               # Customer interface, PAR colors, stats helpers
-└── middleware.ts             # Edge middleware — session cookie + route protection
+│   ├── par.ts               # Customer types and PAR colour system
+│   └── sentry.ts            # Fraud check types (MoMo Sentry)
+└── utils/
+    └── kmzParser.ts         # KMZ/KML/GeoJSON parsing
 ```
 
 ---
 
-## Environment Variables
+## Environment variables
 
-Create a `.env.local` file in the project root:
-
-```env
-NEXT_PUBLIC_MAPBOX_TOKEN=pk.eyJ1...
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbG...
-SUPABASE_SERVICE_ROLE_KEY=eyJhbG...        # Server-only — never expose to browser
+```bash
+NEXT_PUBLIC_MAPBOX_TOKEN=
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 ```
 
 ---
 
-## Setup & Deployment
+## Running locally
 
-### 1. Install dependencies
 ```bash
 npm install
+npm run dev
 ```
-
-### 2. Run database migrations
-
-Execute the following in your **Supabase SQL Editor** (in order):
-
-```sql
--- 1. User profiles + role system
-CREATE TABLE profiles ( ... );
-
--- 2. KMZ boundary layers
-CREATE TABLE kmz_layers ( ... );
-
--- 3. Customer PAR data
-CREATE TABLE customers ( ... );
-
--- 4. Teams
-CREATE TABLE teams ( ... );
-```
-
-> Full migration scripts are in `/supabase/migrations/`.
-
-### 3. Create a storage bucket
-
-In your Supabase dashboard → **Storage** → create a public bucket named `kmz-files`.
-
-### 4. Promote a user to admin
-
-```sql
-UPDATE profiles SET role = 'admin' WHERE id = 'your-user-uuid-here';
-```
-
-### 5. Deploy to Vercel
-
-Connect your repository to Vercel and add all four environment variables from `.env.local` to your project settings. Pushes to `main` deploy automatically.
-
----
-
-## Weekly Data Update Workflow
-
-1. Export the latest PAR CSV from your loan management system (PayGops / internal export)
-2. Log in to the **Admin Portal** → Customer Data
-3. Drop the CSV into the upload zone and click **Sync to Database**
-4. The map reloads automatically — new markers, updated PAR buckets, and refreshed portfolio stats
-
----
-
-## PAR Status Colour Reference
-
-| Status | Color | Meaning |
-|--------|-------|---------|
-| ONTIME | 🟢 Green | Current — no arrears |
-| PAR 1-30 | 🟡 Yellow-Green | 1–30 days past due |
-| PAR 31-60 | 🟠 Amber | 31–60 days past due |
-| PAR 61-90 | 🔴 Orange-Red | 61–90 days past due |
-| PAR 90+ | 🔴 Deep Red | 90+ days past due — critical |
-
----
-
-## Security
-
-- Row Level Security (RLS) enabled on all tables
-- Authenticated users can read customer and layer data
-- Only `role = 'admin'` profiles can write, delete, or manage data
-- Service role key is never exposed to the browser
-- Middleware guards the `/admin` route server-side
 
 ---
 
 ## Author
 
-**Chella Kamina**
+Chella Kamina — data analyst, Lusaka, Zambia.

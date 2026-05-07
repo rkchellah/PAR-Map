@@ -16,7 +16,8 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve"
+    "jsx": "preserve",
+    "types": ["node"]
   },
   "include": [
     "next-env.d.ts",
