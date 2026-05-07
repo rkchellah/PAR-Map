@@ -8,6 +8,7 @@ import { FraudCheck, VERDICT_COLORS } from '../types/sentry'
 
 interface FraudPopupCardProps {
     check: FraudCheck
+    narration?: string
 }
 
 const T = {
@@ -35,7 +36,7 @@ function formatTime(iso: string): string {
     }
 }
 
-export const FraudPopupCard: React.FC<FraudPopupCardProps> = ({ check }) => {
+export const FraudPopupCard: React.FC<FraudPopupCardProps> = ({ check, narration }) => {
     const color = VERDICT_COLORS[check.verdict] ?? '#8a9199'
     const badge = VERDICT_BADGE[check.verdict] ?? VERDICT_BADGE['CAUTION']
 
@@ -57,7 +58,9 @@ export const FraudPopupCard: React.FC<FraudPopupCardProps> = ({ check }) => {
 
             {/* Narration */}
             <div style={{ fontSize: '12px', color: T.variant, lineHeight: 1.6, marginBottom: '14px', paddingBottom: '14px', borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
-                {check.narration}
+                {narration === ''
+                    ? <span style={{ color: T.muted, letterSpacing: '0.12em' }}>generating <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⋯</span></span>
+                    : (narration ?? check.narration)}
             </div>
 
             {/* Fields */}
