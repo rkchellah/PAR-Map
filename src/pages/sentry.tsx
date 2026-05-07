@@ -135,12 +135,23 @@ export default function SentryPage() {
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
+        let isFirst = true
         const load = () => {
-            setLoading(true)
+            if (isFirst) setLoading(true)
             getFraudChecks()
-                .then(setChecks)
+                .then(data => {
+                    // Update checks, but keep local-only checks if they haven't synced yet
+                    setChecks(prev => {
+                        const existingIds = new Set(data.map(c => c.id))
+                        const localOnly = prev.filter(c => !existingIds.has(c.id) && (Date.now() - new Date(c.checked_at).getTime() < 60_000))
+                        return [...localOnly, ...data]
+                    })
+                })
                 .catch(console.error)
-                .finally(() => setLoading(false))
+                .finally(() => {
+                    setLoading(false)
+                    isFirst = false
+                })
         }
         load()
         const interval = setInterval(load, 30_000)
@@ -165,8 +176,8 @@ export default function SentryPage() {
         )
         if (verdictFilter) r = r.filter(c => c.verdict === verdictFilter)
         return r.filter(c =>
-            c.latitude >= -90 && c.latitude <= 90 &&
-            c.longitude >= -180 && c.longitude <= 180
+            typeof c.latitude === 'number' && !isNaN(c.latitude) &&
+            typeof c.longitude === 'number' && !isNaN(c.longitude)
         )
     }, [checks, search, verdictFilter])
 
