@@ -64,6 +64,7 @@ export const LUSAKA_COORDS: Record<string, { lat: number; lng: number }> = {
     'Chibolya': { lat: -15.4280, lng: 28.2710 },
     'Unknown': { lat: -15.4166, lng: 28.2833 },
     'Other': { lat: -15.4100, lng: 28.3100 },
+    'Thelma': { lat: -15.417829440015923, lng: 28.28222743707634 },
 }
 
 // Verdict colours — maps directly to PAR_COLORS keys
