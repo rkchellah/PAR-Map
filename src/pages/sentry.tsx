@@ -15,7 +15,7 @@ import { FraudCheck, FraudStats, computeFraudStats, VERDICT_COLORS, VERDICT_TO_P
 import { FraudPopupCard } from '../components/FraudPopupCard'
 import { getFraudChecks } from '../lib/fraudService'
 import { useAuth } from '../lib/useAuth'
-import { NavLogo, IconAdmin, IconSearch, IconX } from '../components/NavIcons'
+import { NavLogo, IconAdmin } from '../components/NavIcons'
 import {
     IconZoomOut, IconZoomIn, IconBarChart, IconSliders,
     IconMap, IconPin, IconLayers,
@@ -84,7 +84,6 @@ export default function SentryPage() {
 
     const [checks, setChecks] = useState<FraudCheck[]>([])
     const [loading, setLoading] = useState(true)
-    const [search, setSearch] = useState('')
     const [verdictFilter, setVerdictFilter] = useState<string>('')
     const [mapStyle, setMapStyle] = useState('mapbox/streets-v12')
     const [section, setSection] = useState<'overview' | 'filters' | 'theme' | null>('overview')
@@ -92,7 +91,6 @@ export default function SentryPage() {
     const [pinned, setPinned] = useState(true)
     const [hovered, setHovered] = useState(false)
     const hoverRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-    const [showCheckForm, setShowCheckForm] = useState(false)
     const [checkPhone, setCheckPhone] = useState('')
     const [checkLocation, setCheckLocation] = useState(LOCATIONS[0])
     const [checking, setChecking] = useState(false)
@@ -124,7 +122,6 @@ export default function SentryPage() {
 
             setChecks(prev => [newCheck, ...prev])
             setCheckPhone('')
-            setShowCheckForm(false)
         } catch (err) {
             console.error(err)
             alert('Failed to perform fraud check')
@@ -167,19 +164,13 @@ export default function SentryPage() {
     }, [mapStyle])
 
     const filtered = useMemo(() => {
-        const q = search.toLowerCase()
         let r = checks
-        if (q) r = r.filter(c =>
-            c.phone_number.toLowerCase().includes(q) ||
-            c.agent_location.toLowerCase().includes(q) ||
-            c.narration.toLowerCase().includes(q)
-        )
         if (verdictFilter) r = r.filter(c => c.verdict === verdictFilter)
         return r.filter(c =>
             typeof c.latitude === 'number' && !isNaN(c.latitude) &&
             typeof c.longitude === 'number' && !isNaN(c.longitude)
         )
-    }, [checks, search, verdictFilter])
+    }, [checks, verdictFilter])
 
     const stats: FraudStats = useMemo(() => computeFraudStats(filtered), [filtered])
     const customers = useMemo(() => filtered.map(toCustomer), [filtered])
@@ -249,54 +240,21 @@ export default function SentryPage() {
             {/* NAVBAR */}
             <nav style={{ position: 'fixed', top: 0, left: 0, right: 0, minHeight: 52, zIndex: 1000, background: 'rgba(255,255,255,0.90)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderBottom: `1px solid ${T.ghost}`, display: 'flex', alignItems: 'center', padding: '8px 20px', gap: 16 }}>
                 <NavLogo />
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', justifyContent: 'center' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', maxWidth: 460, height: 34, background: T.low, borderRadius: 9, padding: '0 14px', cursor: 'text', transition: 'box-shadow 0.15s' }}
-                            onFocus={e => e.currentTarget.style.boxShadow = `0 0 0 2px ${T.primaryRing}`}
-                            onBlur={e => e.currentTarget.style.boxShadow = 'none'}>
-                            <div style={{ color: T.muted }}><IconSearch /></div>
-                            <input value={search} onChange={e => setSearch(e.target.value)}
-                                placeholder="Search phone number or area…"
-                                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 12.5, color: T.onSurface, fontFamily: 'Manrope' }} />
-                            {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.muted, padding: 0, display: 'flex' }}><IconX size={11} /></button>}
-                        </label>
-                        <button onClick={() => setShowCheckForm(!showCheckForm)}
-                            style={{
-                                height: 34, padding: '0 16px', borderRadius: 9,
-                                background: showCheckForm ? '#111' : T.primary,
-                                color: '#fff', border: 'none', fontSize: 12, fontWeight: 700,
-                                cursor: 'pointer', transition: 'all 0.15s',
-                                display: 'flex', alignItems: 'center', gap: 6,
-                                boxShadow: showCheckForm ? 'none' : '0 2px 8px rgba(74,75,215,0.25)'
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-                            onMouseLeave={e => e.currentTarget.style.transform = 'none'}>
-                            {checking ? 'Checking…' : 'Check Number'}
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <form onSubmit={handleCheck} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input value={checkPhone} onChange={e => setCheckPhone(e.target.value)}
+                            placeholder="Phone number"
+                            required
+                            style={{ width: 150, height: 34, background: T.low, border: 'none', borderRadius: 9, padding: '0 12px', fontSize: 12, outline: 'none', fontFamily: 'Manrope' }} />
+                        <select value={checkLocation} onChange={e => setCheckLocation(e.target.value)}
+                            style={{ height: 34, background: T.low, border: 'none', borderRadius: 9, padding: '0 10px', fontSize: 12, outline: 'none', fontFamily: 'Manrope', cursor: 'pointer' }}>
+                            {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                        </select>
+                        <button type="submit" disabled={checking}
+                            style={{ height: 34, padding: '0 16px', background: T.primary, color: '#fff', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: checking ? 0.6 : 1, boxShadow: '0 2px 8px rgba(74,75,215,0.25)', transition: 'opacity 0.15s' }}>
+                            {checking ? 'Checking…' : 'Check'}
                         </button>
-                    </div>
-
-                    {showCheckForm && (
-                        <form onSubmit={handleCheck} style={{
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            padding: '10px 14px', background: T.card, borderRadius: 12,
-                            marginTop: 10, boxShadow: T.shadow,
-                            animation: 'slideDown 0.2s cubic-bezier(0.4,0,0.2,1)',
-                            border: `1px solid ${T.ghost}`
-                        }}>
-                            <input value={checkPhone} onChange={e => setCheckPhone(e.target.value)}
-                                placeholder="Phone number"
-                                required
-                                style={{ width: 140, height: 32, background: T.low, border: 'none', borderRadius: 6, padding: '0 10px', fontSize: 12, outline: 'none', fontFamily: 'Manrope' }} />
-                            <select value={checkLocation} onChange={e => setCheckLocation(e.target.value)}
-                                style={{ height: 32, background: T.low, border: 'none', borderRadius: 6, padding: '0 8px', fontSize: 12, outline: 'none', fontFamily: 'Manrope', cursor: 'pointer' }}>
-                                {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
-                            </select>
-                            <button type="submit" disabled={checking}
-                                style={{ height: 32, padding: '0 14px', background: T.primary, color: '#fff', border: 'none', borderRadius: 6, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', opacity: checking ? 0.6 : 1 }}>
-                                {checking ? '...' : 'Check'}
-                            </button>
-                        </form>
-                    )}
+                    </form>
                 </div>
                 <div style={{ width: 200, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>
                     <div style={{ fontFamily: 'DM Mono', fontSize: 10.5, color: T.onSurface, fontWeight: 600 }}>{filtered.length.toLocaleString()} Checks</div>
