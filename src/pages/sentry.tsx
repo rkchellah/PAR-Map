@@ -7,15 +7,16 @@
 // PAR statuses → SAFE / CAUTION / STOP
 // customers → fraud checks
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import Head from 'next/head'
 
-import { FraudCheck, FraudStats, computeFraudStats, VERDICT_COLORS, VERDICT_TO_PAR, LUSAKA_COORDS } from '../types/sentry'
+import { FraudCheck, FraudStats, computeFraudStats, VERDICT_TO_PAR, LUSAKA_COORDS } from '../types/sentry'
 import { FraudPopupCard } from '../components/FraudPopupCard'
 import { getFraudChecks } from '../lib/fraudService'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/useAuth'
+import type { PARStatus } from '../types/par'
 import { NavLogo, IconAdmin } from '../components/NavIcons'
 import {
     IconZoomOut, IconZoomIn, IconBarChart, IconSliders,
@@ -33,6 +34,10 @@ interface AgentCheckLogRow {
     phone_number: string
     verdict: string
     checked_at: string
+}
+
+interface FraudCheckExt extends FraudCheck {
+    agent_id: string
 }
 
 interface LogRow {
@@ -148,7 +153,7 @@ export default function SentryPage() {
         const { data } = await supabase
             .from('fraud_checks')
             .select('phone_number, verdict, checked_at')
-            .eq('agent_id', agentId)
+            .eq('agent_id', agentId.toString())
             .order('checked_at', { ascending: false })
         setAgentChecks((data ?? []) as AgentCheckLogRow[])
         setAgentChecksLoading(false)
@@ -244,12 +249,43 @@ export default function SentryPage() {
     }, [checks, verdictFilter])
 
     const stats: FraudStats = useMemo(() => computeFraudStats(filtered), [filtered])
-    const customers = useMemo(() => filtered.map(toCustomer), [filtered])
+
+    const customers = useMemo(() => {
+        const jitter = () => (Math.random() - 0.5) * 0.008
+        return agents.map(agent => {
+            // Find latest check for this agent
+            const agentChecks = checks.filter(c => (c as FraudCheckExt).agent_id === agent.id)
+            const latest = agentChecks.length > 0
+                ? agentChecks.reduce((prev, curr) =>
+                    new Date(curr.checked_at) > new Date(prev.checked_at) ? curr : prev
+                )
+                : null
+
+            // If filter is active, only show if latest matches
+            if (verdictFilter && (!latest || latest.verdict !== verdictFilter)) return null
+
+            const coords = LUSAKA_COORDS[agent.primary_location] ?? LUSAKA_COORDS['Unknown']
+
+            return {
+                contract_ref: latest?.id || agent.id,
+                name: agent.name,
+                phone: latest?.phone_number || '',
+                phone2: '',
+                area: agent.primary_location,
+                par_status: (latest ? VERDICT_TO_PAR[latest.verdict] : 'ONTIME') as PARStatus,
+                lead_generate: '',
+                lead_generate_name: '',
+                latitude: coords.lat + jitter(),
+                longitude: coords.lng + jitter(),
+            }
+        }).filter(Boolean)
+    }, [agents, checks, verdictFilter])
+
     const checksById = useMemo(() => {
         const map = new Map<string, FraudCheck>()
-        filtered.forEach(c => map.set(c.id, c))
+        checks.forEach(c => map.set(c.id, c))
         return map
-    }, [filtered])
+    }, [checks])
     const panelVisible = pinned || hovered
 
     const onPanelEnter = () => { if (hoverRef.current) clearTimeout(hoverRef.current); setHovered(true) }
