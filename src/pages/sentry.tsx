@@ -20,8 +20,20 @@ import { NavLogo, IconAdmin } from '../components/NavIcons'
 import {
     IconZoomOut, IconZoomIn, IconBarChart, IconSliders,
     IconMap, IconPin, IconLayers,
-    IconChevronUp, IconChevronDown, IconClose,
+    IconChevronUp, IconChevronDown, IconClose, IconUsers
 } from '../components/icons'
+
+interface Agent {
+    id: string
+    name: string
+    primary_location: string
+}
+
+interface AgentCheckLogRow {
+    phone_number: string
+    verdict: string
+    checked_at: string
+}
 
 interface LogRow {
     id: string
@@ -102,7 +114,7 @@ export default function SentryPage() {
     const [loading, setLoading] = useState(true)
     const [verdictFilter, setVerdictFilter] = useState<string>('')
     const [mapStyle, setMapStyle] = useState('mapbox/streets-v12')
-    const [section, setSection] = useState<'overview' | 'filters' | 'theme' | null>('overview')
+    const [section, setSection] = useState<'overview' | 'filters' | 'theme' | 'agents' | null>('overview')
     const [zoom, setZoom] = useState(13)
     const [pinned, setPinned] = useState(true)
     const [hovered, setHovered] = useState(false)
@@ -113,6 +125,34 @@ export default function SentryPage() {
     const [showLogs, setShowLogs] = useState(false)
     const [logs, setLogs] = useState<LogRow[]>([])
     const [logsLoading, setLogsLoading] = useState(false)
+
+    const [agents, setAgents] = useState<Agent[]>([])
+    const [agentsLoading, setAgentsLoading] = useState(false)
+    const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
+    const [showAgentChecks, setShowAgentChecks] = useState(false)
+    const [agentChecks, setAgentChecks] = useState<AgentCheckLogRow[]>([])
+    const [agentChecksLoading, setAgentChecksLoading] = useState(false)
+
+    async function fetchAgents() {
+        setAgentsLoading(true)
+        const { data } = await supabase
+            .from('booth_agents')
+            .select('id, name, primary_location')
+            .order('name')
+        setAgents((data ?? []) as Agent[])
+        setAgentsLoading(false)
+    }
+
+    async function fetchAgentChecks(agentId: string) {
+        setAgentChecksLoading(true)
+        const { data } = await supabase
+            .from('fraud_checks')
+            .select('phone_number, verdict, checked_at')
+            .eq('agent_id', agentId)
+            .order('checked_at', { ascending: false })
+        setAgentChecks((data ?? []) as AgentCheckLogRow[])
+        setAgentChecksLoading(false)
+    }
 
     async function fetchLogs() {
         setLogsLoading(true)
@@ -181,6 +221,7 @@ export default function SentryPage() {
                 })
         }
         load()
+        fetchAgents()
         const interval = setInterval(load, 30_000)
         return () => clearInterval(interval)
     }, [])
@@ -355,6 +396,33 @@ export default function SentryPage() {
                         </div>
                     )}
 
+                    {/* Agents section */}
+                    <SB icon={<IconUsers size={16} />} label="Agents" open={section === 'agents'} onToggle={() => setSection(s => s === 'agents' ? null : 'agents')} />
+                    {section === 'agents' && (
+                        <div style={{ padding: '6px 12px 12px' }}>
+                            {agentsLoading ? (
+                                <div style={{ padding: '10px', fontSize: 12, color: T.muted }}>Loading agents…</div>
+                            ) : agents.length === 0 ? (
+                                <div style={{ padding: '10px', fontSize: 12, color: T.muted }}>No agents found</div>
+                            ) : (
+                                agents.map(agent => (
+                                    <button key={agent.id}
+                                        onClick={() => {
+                                            setSelectedAgent(agent)
+                                            setShowAgentChecks(true)
+                                            fetchAgentChecks(agent.id)
+                                        }}
+                                        style={{ width: '100%', display: 'flex', flexDirection: 'column', padding: '10px', borderRadius: 8, marginBottom: 4, cursor: 'pointer', background: 'transparent', border: 'none', transition: 'all 0.12s', textAlign: 'left' }}
+                                        onMouseEnter={e => e.currentTarget.style.background = T.low}
+                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                        <div style={{ fontSize: 12, color: T.onSurface, fontWeight: 700, marginBottom: 2 }}>{agent.name}</div>
+                                        <div style={{ fontSize: 11, color: T.muted }}>{agent.primary_location}</div>
+                                    </button>
+                                ))
+                            )}
+                        </div>
+                    )}
+
                     {/* Filter section */}
                     <SB icon={<IconSliders size={16} />} label="Filter Verdict" open={section === 'filters'} onToggle={() => setSection(s => s === 'filters' ? null : 'filters')} />
                     {section === 'filters' && (
@@ -467,6 +535,56 @@ export default function SentryPage() {
                     </div>
                     <div style={{ padding: '10px 20px', borderTop: `1px solid ${T.ghost}`, flexShrink: 0 }}>
                         <span style={{ fontFamily: 'DM Mono', fontSize: 9.5, color: T.muted }}>{logs.length.toLocaleString()} records</span>
+                    </div>
+                </div>
+            )}
+
+            {/* AGENT CHECKS PANEL */}
+            {showAgentChecks && (
+                <div style={{ position: 'fixed', top: 52, right: 0, bottom: 0, width: 420, zIndex: 950, background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 40px rgba(45,51,53,0.10)', animation: 'slideIn 0.22s cubic-bezier(0.4,0,0.2,1)' }}>
+                    <div style={{ height: 50, padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, borderBottom: `1px solid ${T.ghost}` }}>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: T.onSurface }}>{selectedAgent?.name}</span>
+                            <span style={{ fontSize: 10, color: T.muted, fontWeight: 500 }}>{selectedAgent?.primary_location}</span>
+                        </div>
+                        <button onClick={() => setShowAgentChecks(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.muted, display: 'flex', padding: 4, borderRadius: 6 }} onMouseEnter={e => e.currentTarget.style.color = T.onSurface} onMouseLeave={e => e.currentTarget.style.color = T.muted}>
+                            <IconClose size={16} />
+                        </button>
+                    </div>
+                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                        {agentChecksLoading ? (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 120, color: T.muted, fontSize: 13 }}>Loading checks…</div>
+                        ) : agentChecks.length === 0 ? (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 120, color: T.muted, fontSize: 13 }}>No checks for this agent</div>
+                        ) : (
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'Manrope' }}>
+                                <thead>
+                                    <tr style={{ position: 'sticky', top: 0, background: T.low }}>
+                                        {['Phone Number', 'Verdict', 'Date / Time'].map(h => (
+                                            <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 9.5, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap', borderBottom: `1px solid ${T.ghost}` }}>{h}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {agentChecks.map((row, i) => {
+                                        const vColor = row.verdict === 'SAFE' ? '#16a34a' : row.verdict === 'STOP' ? '#dc2626' : '#d97706'
+                                        const vBg = row.verdict === 'SAFE' ? 'rgba(22,163,74,0.08)' : row.verdict === 'STOP' ? 'rgba(220,38,38,0.08)' : 'rgba(217,119,6,0.08)'
+                                        return (
+                                            <tr key={i} style={{ borderBottom: `1px solid ${T.ghost}`, background: i % 2 === 0 ? '#fff' : T.canvas }}>
+                                                <td style={{ padding: '9px 14px', color: T.variant, fontFamily: 'DM Mono' }}>{row.phone_number}</td>
+                                                <td style={{ padding: '9px 14px' }}>
+                                                    <span style={{ background: vBg, color: vColor, padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700, letterSpacing: '0.04em' }}>{row.verdict}</span>
+                                                </td>
+                                                <td style={{ padding: '9px 14px', color: T.muted, fontFamily: 'DM Mono', fontSize: 11, whiteSpace: 'nowrap' }}>{fmtTime(row.checked_at)}</td>
+                                            </tr>
+                                        )
+                                    })}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                    <div style={{ padding: '10px 20px', borderTop: `1px solid ${T.ghost}`, flexShrink: 0 }}>
+                        <span style={{ fontFamily: 'DM Mono', fontSize: 9.5, color: T.muted }}>{agentChecks.length.toLocaleString()} records</span>
                     </div>
                 </div>
             )}
