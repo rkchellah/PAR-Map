@@ -68,6 +68,7 @@ export const FraudPopupCard: React.FC<FraudPopupCardProps> = ({ check, narration
                 {[
                     { label: 'Location', value: check.agent_location },
                     { label: 'Checked', value: formatTime(check.checked_at) },
+                    { label: 'Nokia NaC APIs', value: 'SIM Swap · Device Swap · Device Status' },
                 ].map((row, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
                         <span style={{ color: T.muted, fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0, width: '96px' }}>
