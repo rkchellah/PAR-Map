@@ -55,7 +55,7 @@ export const LUSAKA_COORDS: Record<string, { lat: number; lng: number }> = {
     'Chawama': { lat: -15.4500, lng: 28.3000 },
     'Mandevu': { lat: -15.3833, lng: 28.2833 },
     'Kabwata': { lat: -15.4167, lng: 28.3333 },
-    'Cairo Road Shoprite': { lat: -15.4170, lng: 28.2830 },
+    'Cairo Road Shoprite': { lat: -15.4166, lng: 28.2933 },
     'City Market': { lat: -15.4150, lng: 28.2760 },
     'Down Town Lusaka': { lat: -15.4210, lng: 28.2860 },
     'Mtendere Market': { lat: -15.3920, lng: 28.3410 },
