@@ -333,9 +333,7 @@ export default function AgentPage() {
               </div>
 
               <button className="submit-btn" type="submit" disabled={checking}>
-                {checking
-                  ? <div style={{ width: 18, height: 18, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)', borderTopColor: '#fff', animation: 'spin 0.7s linear infinite', margin: '0 auto' }} />
-                  : 'Check Number'}
+                {checking ? 'Checking…' : 'Check Number'}
               </button>
             </form>
           </div>
