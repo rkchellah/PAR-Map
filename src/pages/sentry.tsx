@@ -14,6 +14,7 @@ import Head from 'next/head'
 import { FraudCheck, FraudStats, computeFraudStats, VERDICT_COLORS, VERDICT_TO_PAR, LUSAKA_COORDS } from '../types/sentry'
 import { FraudPopupCard } from '../components/FraudPopupCard'
 import { getFraudChecks } from '../lib/fraudService'
+import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/useAuth'
 import { NavLogo, IconAdmin } from '../components/NavIcons'
 import {
@@ -21,6 +22,21 @@ import {
     IconMap, IconPin, IconLayers,
     IconChevronUp, IconChevronDown, IconClose,
 } from '../components/icons'
+
+interface LogRow {
+    id: string
+    agent_name: string | null
+    agent_location: string
+    phone_number: string
+    verdict: string
+    checked_at: string
+}
+
+function fmtTime(iso: string) {
+    try {
+        return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+    } catch { return iso }
+}
 
 // Same Map component — fraud checks are converted to Customer shape below
 const MapComponent = dynamic(() => import('../components/Map'), { ssr: false })
@@ -94,6 +110,20 @@ export default function SentryPage() {
     const [checkPhone, setCheckPhone] = useState('')
     const [checkLocation, setCheckLocation] = useState(LOCATIONS[0])
     const [checking, setChecking] = useState(false)
+    const [showLogs, setShowLogs] = useState(false)
+    const [logs, setLogs] = useState<LogRow[]>([])
+    const [logsLoading, setLogsLoading] = useState(false)
+
+    async function fetchLogs() {
+        setLogsLoading(true)
+        const { data } = await supabase
+            .from('fraud_checks')
+            .select('id, agent_name, agent_location, phone_number, verdict, checked_at')
+            .order('checked_at', { ascending: false })
+            .limit(500)
+        setLogs((data ?? []) as LogRow[])
+        setLogsLoading(false)
+    }
 
     const handleCheck = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -206,6 +236,7 @@ export default function SentryPage() {
           .leaflet-popup-close-button:hover{color:#111!important;background:none!important;}
           @keyframes spin{to{transform:rotate(360deg);}}
           @keyframes slideDown{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}
+          @keyframes slideIn{from{opacity:0;transform:translateX(24px);}to{opacity:1;transform:translateX(0);}}
         `}</style>
             </Head>
 
@@ -371,18 +402,74 @@ export default function SentryPage() {
                 </div>
 
                 {/* Panel footer */}
-                <div style={{ padding: '10px 16px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-                    <span style={{ fontFamily: 'DM Mono', fontSize: 9.5, color: T.muted, letterSpacing: '0.02em' }}>MoMo Sentry · Lusaka</span>
-                    {verdictFilter && (
-                        <button onClick={() => setVerdictFilter('')}
-                            style={{ fontSize: 10.5, color: T.primary, background: T.primaryDim, border: 'none', borderRadius: 5, padding: '3px 9px', cursor: 'pointer', fontFamily: 'Manrope', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}
-                            onMouseEnter={e => e.currentTarget.style.boxShadow = `0 0 0 1.5px ${T.primaryRing}`}
-                            onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}>
-                            <IconClose size={12} /> Clear filter
-                        </button>
-                    )}
+                <div style={{ padding: '10px 16px 14px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+                    <button
+                        onClick={() => { setShowLogs(true); fetchLogs() }}
+                        style={{ width: '100%', height: 34, background: T.low, border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, color: T.variant, cursor: 'pointer', fontFamily: 'Manrope', transition: 'background 0.12s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = T.container}
+                        onMouseLeave={e => e.currentTarget.style.background = T.low}>
+                        View Logs
+                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontFamily: 'DM Mono', fontSize: 9.5, color: T.muted, letterSpacing: '0.02em' }}>MoMo Sentry · Lusaka</span>
+                        {verdictFilter && (
+                            <button onClick={() => setVerdictFilter('')}
+                                style={{ fontSize: 10.5, color: T.primary, background: T.primaryDim, border: 'none', borderRadius: 5, padding: '3px 9px', cursor: 'pointer', fontFamily: 'Manrope', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}
+                                onMouseEnter={e => e.currentTarget.style.boxShadow = `0 0 0 1.5px ${T.primaryRing}`}
+                                onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}>
+                                <IconClose size={12} /> Clear filter
+                            </button>
+                        )}
+                    </div>
                 </div>
             </aside>
+
+            {/* LOGS PANEL */}
+            {showLogs && (
+                <div style={{ position: 'fixed', top: 52, right: 0, bottom: 0, width: 580, zIndex: 950, background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 40px rgba(45,51,53,0.10)', animation: 'slideIn 0.22s cubic-bezier(0.4,0,0.2,1)' }}>
+                    <div style={{ height: 50, padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, borderBottom: `1px solid ${T.ghost}` }}>
+                        <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: T.onSurface }}>Fraud Check Logs</span>
+                        <button onClick={() => setShowLogs(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.muted, display: 'flex', padding: 4, borderRadius: 6 }} onMouseEnter={e => e.currentTarget.style.color = T.onSurface} onMouseLeave={e => e.currentTarget.style.color = T.muted}>
+                            <IconClose size={16} />
+                        </button>
+                    </div>
+                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                        {logsLoading ? (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 120, color: T.muted, fontSize: 13 }}>Loading…</div>
+                        ) : (
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'Manrope' }}>
+                                <thead>
+                                    <tr style={{ position: 'sticky', top: 0, background: T.low }}>
+                                        {['Agent Name', 'Location', 'Phone Number', 'Verdict', 'Date / Time'].map(h => (
+                                            <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 9.5, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: T.muted, whiteSpace: 'nowrap', borderBottom: `1px solid ${T.ghost}` }}>{h}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {logs.map((row, i) => {
+                                        const vColor = row.verdict === 'SAFE' ? '#16a34a' : row.verdict === 'STOP' ? '#dc2626' : '#d97706'
+                                        const vBg = row.verdict === 'SAFE' ? 'rgba(22,163,74,0.08)' : row.verdict === 'STOP' ? 'rgba(220,38,38,0.08)' : 'rgba(217,119,6,0.08)'
+                                        return (
+                                            <tr key={row.id} style={{ borderBottom: `1px solid ${T.ghost}`, background: i % 2 === 0 ? '#fff' : T.canvas }}>
+                                                <td style={{ padding: '9px 14px', color: T.onSurface, fontWeight: 500 }}>{row.agent_name ?? '—'}</td>
+                                                <td style={{ padding: '9px 14px', color: T.variant }}>{row.agent_location}</td>
+                                                <td style={{ padding: '9px 14px', color: T.variant, fontFamily: 'DM Mono' }}>{row.phone_number}</td>
+                                                <td style={{ padding: '9px 14px' }}>
+                                                    <span style={{ background: vBg, color: vColor, padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700, letterSpacing: '0.04em' }}>{row.verdict}</span>
+                                                </td>
+                                                <td style={{ padding: '9px 14px', color: T.muted, fontFamily: 'DM Mono', fontSize: 11, whiteSpace: 'nowrap' }}>{fmtTime(row.checked_at)}</td>
+                                            </tr>
+                                        )
+                                    })}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                    <div style={{ padding: '10px 20px', borderTop: `1px solid ${T.ghost}`, flexShrink: 0 }}>
+                        <span style={{ fontFamily: 'DM Mono', fontSize: 9.5, color: T.muted }}>{logs.length.toLocaleString()} records</span>
+                    </div>
+                </div>
+            )}
         </>
     )
 }
