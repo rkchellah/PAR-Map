@@ -49,18 +49,26 @@ export default function AgentPage() {
   const [checkError,    setCheckError]    = useState('')
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) { setAuthLoading(false); return }
-      await loadAgent(session.user.id)
-      setAuthLoading(false)
-    })
+    const timeout = setTimeout(() => setAuthLoading(false), 3000)
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    supabase.auth.getSession()
+      .then(async ({ data: { session } }) => {
+        clearTimeout(timeout)
+        if (!session) { setAuthLoading(false); return }
+        await loadAgent(session.user.id)
+        setAuthLoading(false)
+      })
+      .catch(() => {
+        clearTimeout(timeout)
+        setAuthLoading(false)
+      })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!session) { setAgent(null); return }
       await loadAgent(session.user.id)
     })
 
-    return () => subscription.unsubscribe()
+    return () => { clearTimeout(timeout); subscription.unsubscribe() }
   }, [])
 
   async function loadAgent(userId: string) {
