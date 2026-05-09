@@ -84,6 +84,7 @@ export default function AgentPage() {
   }
 
   async function handleLogin(e: React.FormEvent) {
+    console.log('sign in clicked')
     e.preventDefault()
     setLoginError('')
     setLoginLoading(true)
