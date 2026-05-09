@@ -33,17 +33,16 @@ export default function AgentRegisterPage() {
     setError('')
     setLoading(true)
 
-    const { data: authData, error: signUpErr } = await supabase.auth.signUp({ email, password })
-
-    if (signUpErr || !authData.user) {
-      setError(signUpErr?.message ?? 'Registration failed')
+    const { data, error } = await supabase.auth.signUp({ email, password })
+    if (error || !data?.user) {
+      setError(error?.message ?? 'Registration failed')
       setLoading(false)
       return
     }
 
     const { error: insertErr } = await supabase
       .from('booth_agents')
-      .insert({ user_id: authData.user.id, name, phone, primary_location: location })
+      .insert({ user_id: data.user.id, name, phone, primary_location: location })
 
     if (insertErr) {
       setError(insertErr.message ?? 'Failed to save agent profile')
