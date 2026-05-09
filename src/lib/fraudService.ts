@@ -5,8 +5,6 @@
 import { supabase } from './supabase'
 import { FraudCheck, LUSAKA_COORDS } from '../types/sentry'
 
-const API_BASE = process.env.NEXT_PUBLIC_MOMO_SENTRY_API ?? "https://momo-sentry-production.up.railway.app"
-
 export async function getFraudChecks(): Promise<FraudCheck[]> {
     const PAGE = 1000
     const all: FraudCheck[] = []
