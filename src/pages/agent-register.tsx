@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
-import { supabase } from '../lib/supabase'
+import { supabaseAgent as supabase } from '../lib/supabaseAgent'
 import { IconLogoMark, IconEye, IconEyeOff } from '../components/icons'
 
 const LOCATIONS = [
