@@ -303,7 +303,7 @@ export default function AgentPage() {
                   type="tel"
                   value={checkPhone}
                   onChange={e => setCheckPhone(e.target.value)}
-                  placeholder="+260 97 000 0000"
+                  placeholder="+99999991000"
                   required
                 />
               </div>
