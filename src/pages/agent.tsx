@@ -63,7 +63,8 @@ export default function AgentPage() {
         setAuthLoading(false)
       })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('auth state changed:', event)
       if (!session) { setAgent(null); return }
       await loadAgent(session.user.id)
     })
@@ -88,13 +89,15 @@ export default function AgentPage() {
     e.preventDefault()
     setLoginError('')
     setLoginLoading(true)
-    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword })
+    const { data, error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword })
     if (error) {
       setLoginError(error.message ?? 'Incorrect email or password')
       setLoginLoading(false)
       return
     }
-    // on success onAuthStateChange fires → loadAgent sets agent
+    if (data.session) {
+      await loadAgent(data.session.user.id)
+    }
     setLoginLoading(false)
   }
 
