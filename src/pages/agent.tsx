@@ -87,14 +87,12 @@ export default function AgentPage() {
     e.preventDefault()
     setLoginError('')
     setLoginLoading(true)
-    const { data, error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword })
+    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword })
     if (error) {
-      console.log('[agent] signInWithPassword error:', error)
       setLoginError(error.message ?? 'Incorrect email or password')
       setLoginLoading(false)
       return
     }
-    console.log('[agent] signInWithPassword success, session:', data.session)
     // on success onAuthStateChange fires → loadAgent sets agent
     setLoginLoading(false)
   }
@@ -120,6 +118,7 @@ export default function AgentPage() {
         body: JSON.stringify({
           phone_number: checkPhone,
           location: checkLocation,
+          agent_location: checkLocation,
           agent_id: agent.id,
           agent_name: agent.name,
         }),
