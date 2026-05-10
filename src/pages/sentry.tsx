@@ -28,6 +28,8 @@ interface Agent {
     id: string
     name: string
     primary_location: string
+    latitude?: number
+    longitude?: number
 }
 
 interface AgentCheckLogRow {
@@ -142,7 +144,7 @@ export default function SentryPage() {
         setAgentsLoading(true)
         const { data } = await supabase
             .from('booth_agents')
-            .select('id, name, primary_location')
+            .select('id, name, primary_location, latitude, longitude')
             .order('name')
         setAgents((data ?? []) as Agent[])
         setAgentsLoading(false)
@@ -262,7 +264,10 @@ export default function SentryPage() {
 
             if (verdictFilter && (!latest || latest.verdict !== verdictFilter)) return null
 
-            const coords = LUSAKA_COORDS[agent.primary_location] ?? LUSAKA_COORDS['Unknown']
+            const hasStoredCoords = typeof agent.latitude === 'number' && typeof agent.longitude === 'number'
+            const coords = hasStoredCoords 
+                ? { lat: agent.latitude!, lng: agent.longitude! }
+                : (LUSAKA_COORDS[agent.primary_location] ?? LUSAKA_COORDS['Unknown'])
 
             return {
                 contract_ref: latest?.id || agent.id,
@@ -273,8 +278,8 @@ export default function SentryPage() {
                 par_status: (latest ? VERDICT_TO_PAR[latest.verdict] : 'ONTIME') as PARStatus,
                 lead_generate: '',
                 lead_generate_name: '',
-                latitude: coords.lat + jitter(),
-                longitude: coords.lng + jitter(),
+                latitude: hasStoredCoords ? coords.lat : coords.lat + jitter(),
+                longitude: hasStoredCoords ? coords.lng : coords.lng + jitter(),
             }
         })
 
