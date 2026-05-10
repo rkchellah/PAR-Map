@@ -39,9 +39,13 @@ export async function getFlaggedChecks(): Promise<FraudCheck[]> {
 }
 
 export async function getBoothLocations(): Promise<BoothLocation[]> {
-    const { data } = await supabase
+    const { data, error } = await supabase
         .from('booth_locations')
         .select('name, latitude, longitude')
         .order('name')
+    if (error) {
+        console.error('Supabase error fetching booth_locations:', error)
+        throw error
+    }
     return (data ?? []) as BoothLocation[]
 }

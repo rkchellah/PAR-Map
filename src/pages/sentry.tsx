@@ -90,6 +90,9 @@ const MAP_STYLES = [
     { id: 'satellite', label: 'Satellite', style: 'mapbox/satellite-streets-v12' },
 ]
 
+const FALLBACK_LOCATIONS = ['Cairo Road Shoprite', 'Freedom Road', 'City Market', 'Down Town Lusaka', 'Lumumba Road']
+
+
 // Convert FraudCheck to Customer shape so the existing Map component
 // renders markers without any modifications.
 // Verdict maps to par_status so PAR_COLORS picks the right colour.
@@ -121,7 +124,7 @@ export default function SentryPage() {
     const [hovered, setHovered] = useState(false)
     const hoverRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const [checkPhone, setCheckPhone] = useState('')
-    const [checkLocation, setCheckLocation] = useState('')
+    const [checkLocation, setCheckLocation] = useState(FALLBACK_LOCATIONS[0])
     const [boothLocations, setBoothLocations] = useState<BoothLocation[]>([])
     const [checking, setChecking] = useState(false)
     const [showLogs, setShowLogs] = useState(false)
@@ -398,7 +401,10 @@ export default function SentryPage() {
                             style={{ width: 150, height: 34, background: T.low, border: 'none', borderRadius: 9, padding: '0 12px', fontSize: 12, outline: 'none', fontFamily: 'Manrope' }} />
                         <select value={checkLocation} onChange={e => setCheckLocation(e.target.value)}
                             style={{ height: 34, background: T.low, border: 'none', borderRadius: 9, padding: '0 10px', fontSize: 12, outline: 'none', fontFamily: 'Manrope', cursor: 'pointer' }}>
-                            {boothLocations.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
+                            {boothLocations.length > 0 
+                                ? boothLocations.map(l => <option key={l.name} value={l.name}>{l.name}</option>)
+                                : FALLBACK_LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)
+                            }
                         </select>
                         <button type="submit" disabled={checking}
                             style={{ height: 34, padding: '0 16px', background: T.primary, color: '#fff', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: checking ? 0.6 : 1, boxShadow: '0 2px 8px rgba(74,75,215,0.25)', transition: 'opacity 0.15s' }}>
