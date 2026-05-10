@@ -55,7 +55,7 @@ export const LUSAKA_COORDS: Record<string, { lat: number; lng: number }> = {
     'Chawama': { lat: -15.4500, lng: 28.3000 },
     'Mandevu': { lat: -15.3833, lng: 28.2833 },
     'Kabwata': { lat: -15.4167, lng: 28.3333 },
-    'Cairo Road Shoprite': { lat: -15.41779, lng: 28.28245 },
+    'Cairo Road Shoprite': { lat: -15.4220, lng: 28.2860 },
     'City Market': { lat: -15.4150, lng: 28.2760 },
     'Down Town Lusaka': { lat: -15.4210, lng: 28.2860 },
     'Mtendere Market': { lat: -15.3920, lng: 28.3410 },
@@ -64,7 +64,7 @@ export const LUSAKA_COORDS: Record<string, { lat: number; lng: number }> = {
     'Chibolya': { lat: -15.4280, lng: 28.2710 },
     'Unknown': { lat: -15.4166, lng: 28.2833 },
     'Other': { lat: -15.4100, lng: 28.3100 },
-    'Thelma': { lat: -15.417829440015923, lng: 28.28222743707634 },
+    'Thelma': { lat: -15.41779, lng: 28.28245 },
 }
 
 // Verdict colours — maps directly to PAR_COLORS keys

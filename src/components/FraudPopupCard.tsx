@@ -41,7 +41,7 @@ export const FraudPopupCard: React.FC<FraudPopupCardProps> = ({ check, narration
     const badge = VERDICT_BADGE[check.verdict] ?? VERDICT_BADGE['CAUTION']
 
     return (
-        <div style={{ padding: '20px', width: '280px', fontFamily: 'Manrope, sans-serif' }}>
+        <div style={{ padding: '20px', width: '360px', fontFamily: 'Manrope, sans-serif' }}>
 
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', paddingBottom: '16px', borderBottom: '1px solid rgba(0,0,0,0.04)', paddingRight: '28px' }}>

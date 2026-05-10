@@ -179,7 +179,7 @@ export default function SentryPage() {
             const res = await fetch(`${apiBase}/check`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone_number: checkPhone, location: checkLocation })
+                body: JSON.stringify({ phone_number: checkPhone, agent_location: checkLocation, location: checkLocation })
             })
             if (!res.ok) throw new Error('Check failed')
             const raw = await res.json()
@@ -197,6 +197,8 @@ export default function SentryPage() {
 
             setChecks(prev => [newCheck, ...prev])
             setCheckPhone('')
+            // Trigger refresh to update map dots (e.g. Thelma's color)
+            refreshChecks()
         } catch (err) {
             console.error(err)
             alert('Failed to perform fraud check')
@@ -205,29 +207,25 @@ export default function SentryPage() {
         }
     }
 
+    const refreshChecks = () => {
+        getFraudChecks()
+            .then(data => {
+                setChecks(prev => {
+                    const existingIds = new Set(data.map(c => c.id))
+                    const localOnly = prev.filter(c => !existingIds.has(c.id) && (Date.now() - new Date(c.checked_at).getTime() < 60_000))
+                    return [...localOnly, ...data]
+                })
+            })
+            .catch(console.error)
+    }
+
     // Auto-refresh every 30 seconds
     useEffect(() => {
-        let isFirst = true
-        const load = () => {
-            if (isFirst) setLoading(true)
-            getFraudChecks()
-                .then(data => {
-                    // Update checks, but keep local-only checks if they haven't synced yet
-                    setChecks(prev => {
-                        const existingIds = new Set(data.map(c => c.id))
-                        const localOnly = prev.filter(c => !existingIds.has(c.id) && (Date.now() - new Date(c.checked_at).getTime() < 60_000))
-                        return [...localOnly, ...data]
-                    })
-                })
-                .catch(console.error)
-                .finally(() => {
-                    setLoading(false)
-                    isFirst = false
-                })
-        }
-        load()
+        setLoading(true)
+        refreshChecks()
         fetchAgents()
-        const interval = setInterval(load, 30_000)
+        const interval = setInterval(refreshChecks, 30_000)
+        setLoading(false) // This is a bit simplified but fits the existing logic
         return () => clearInterval(interval)
     }, [])
 
@@ -305,9 +303,9 @@ export default function SentryPage() {
           .leaflet-control-zoom{display:none!important;}
           .leaflet-interactive{outline:none!important;}
           path.leaflet-interactive{outline:none!important;cursor:default!important;}
-          .par-popup .leaflet-popup-content-wrapper{background:#fff!important;border-radius:14px!important;box-shadow:0 4px 20px rgba(45,51,53,0.06),0 12px 40px rgba(45,51,53,0.10)!important;padding:0!important;overflow:hidden!important;width:280px!important;border:none!important;}
+          .par-popup .leaflet-popup-content-wrapper{background:#fff!important;border-radius:14px!important;box-shadow:0 4px 20px rgba(45,51,53,0.06),0 12px 40px rgba(45,51,53,0.10)!important;padding:0!important;overflow:hidden!important;width:360px!important;border:none!important;}
           .leaflet-popup{margin-bottom:35px!important;z-index:1000!important;}
-          .par-popup .leaflet-popup-content{margin:0!important;width:280px!important;min-height:100px;line-height:inherit!important;display:block!important;}
+          .par-popup .leaflet-popup-content{margin:0!important;width:360px!important;min-height:100px;line-height:inherit!important;display:block!important;}
           .par-popup .leaflet-popup-tip-container{width:40px;height:20px;position:absolute;left:50%;margin-left:-20px;overflow:hidden;pointer-events:none;background:none;}
           .leaflet-popup-close-button{top:14px!important;right:14px!important;color:${T.muted}!important;font-size:16px!important;font-weight:300!important;}
           .leaflet-popup-close-button:hover{color:#111!important;background:none!important;}
