@@ -1,34 +1,28 @@
 # PAR Map
 
-One of my responsibilities at work involves territory management and loan portfolio tracking for a field team operating across Lusaka. For a long time that meant spreadsheets, Google Maps links shared over WhatsApp, and area circle boundaries that existed only in people's heads.
+Territory management and loan portfolio tracking tools like Google Maps, QGIS, and Google Earth were either too limited or too heavy for what I needed. Google Maps polygons worked but couldn't be shared reliably. QGIS produced good output but required installation on every machine. A Python script generating KMZ files got closer but created more workflows than it solved.
 
-I needed something I could actually use. So I built it.
+I needed one tool, in a browser, that anyone could open without installing anything.
 
-The first version was hand-drawn polygons on Google Maps. It worked well enough to show the concept but wasn't something I could maintain or share reliably. Then I tried QGIS — better output quality but required everyone to have it installed. Then a Python script that took coordinates copied from Google Maps and generated KMZ files for Google Earth. Three tools, three workflows, all friction.
-
-After three hackathons where I was learning how to build proper web apps, I had enough to build something real. A map in a browser. Anyone opens it, logs in, sees what they need. No installs, no lost access.
-
-Around the same time I was sending PAR reports by email. Some people on the team didn't use Excel confidently. I thought if I'm building the territory map anyway I might as well put the portfolio data on the same map. One tool instead of two.
-
-It worked. My manager liked it.
+So I built PAR Map.
 
 ---
 
 ## What it does
 
-Log in and see Lusaka. Every customer is a dot coloured by PAR status — green is on time, the deeper the red the more overdue. Filter by status, search by name or number, see territory boundaries on the same map.
+Log in and you see Lusaka. Every customer is a dot on the map coloured by their PAR status — green means on time, yellow is 1-30 days overdue, orange is 31-60, red is 61-90, dark red is over 90 days. You see the full picture at a glance without opening a single spreadsheet.
 
-Upload a PAR CSV weekly. The map updates. No Excel, no email.
+Filter by PAR status to focus on what matters. Search by name, phone number, or contract reference. Territory boundaries and area circles sit on the same map so field agents know exactly where they're working. Upload a new PAR CSV and the map updates — no Excel, no email chains, no one waiting for a report.
 
 ---
 
-## MoMo Sentry integration
+## MoMo Sentry
 
-The `/sentry` page is part of a separate project — MoMo Sentry — built for the Africa Ignite Hackathon 2026. It uses the same Supabase project and the same Lusaka map to plot fraud check results from mobile money booth agents.
+The `/sentry` page runs a separate project built for the Africa Ignite Hackathon 2026. Mobile money booth agents in Lusaka face a specific fraud problem — SIM swap. Someone replaces a customer's SIM card, then walks to a booth and withdraws everything before anyone notices. MoMo Sentry uses Nokia's Network as Code CAMARA APIs to check whether a SIM was recently swapped before cash is released. Every check gets logged and plotted on the same Lusaka map.
 
-Same city, same infrastructure, different problem.
+Same infrastructure, same city, different problem.
 
-MoMo Sentry: https://github.com/rkchellah/MoMo-Sentry
+[MoMo-Sentry](https://github.com/rkchellah/MoMo-Sentry)
 
 ---
 
@@ -62,6 +56,7 @@ src/
 ├── pages/
 │   ├── index.tsx            # PAR portfolio map
 │   ├── sentry.tsx           # Fraud detection map (MoMo Sentry)
+│   ├── agent.tsx            # Booth agent check screen (MoMo Sentry)
 │   ├── admin.tsx            # Admin dashboard
 │   └── login.tsx            # Auth
 ├── types/
@@ -80,6 +75,7 @@ NEXT_PUBLIC_MAPBOX_TOKEN=
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_MOMO_SENTRY_API=
 ```
 
 ---
@@ -90,9 +86,3 @@ SUPABASE_SERVICE_ROLE_KEY=
 npm install
 npm run dev
 ```
-
----
-
-## Author
-
-Chella Kamina — data analyst, Lusaka, Zambia.
