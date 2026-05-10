@@ -1,15 +1,13 @@
 // src/pages/agent-register.tsx
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { supabaseAgent as supabase } from '../lib/supabaseAgent'
 import { IconLogoMark, IconEye, IconEyeOff } from '../components/icons'
+import { getBoothLocations } from '../lib/fraudService'
+import { BoothLocation } from '../types/sentry'
 
-const LOCATIONS = [
-  'Cairo Road Shoprite', 'City Market', 'Down Town Lusaka', 'Mtendere Market',
-  'Lumumba Road', 'Town Centre Lusaka', 'Chilenje Market', 'Kalingalinga',
-  'Chibolya', 'Kanyama', 'Other',
-]
+
 
 export default function AgentRegisterPage() {
   const router = useRouter()
@@ -18,10 +16,19 @@ export default function AgentRegisterPage() {
   const [email,           setEmail]           = useState('')
   const [password,        setPassword]        = useState('')
   const [phone,           setPhone]           = useState('')
-  const [location,        setLocation]        = useState(LOCATIONS[0])
+  const [location,        setLocation]        = useState('')
+  const [boothLocations,  setBoothLocations]  = useState<BoothLocation[]>([])
   const [showPwd,         setShowPwd]         = useState(false)
   const [loading,         setLoading]         = useState(false)
   const [error,           setError]           = useState('')
+
+  useEffect(() => {
+    getBoothLocations().then(locs => {
+      setBoothLocations(locs)
+      if (locs.length > 0) setLocation(locs[0].name)
+    }).catch(console.error)
+  }, [])
+
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -186,7 +193,7 @@ export default function AgentRegisterPage() {
                 onChange={e => setLocation(e.target.value)}
                 style={{ cursor: 'pointer' }}
               >
-                {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                {boothLocations.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
               </select>
             </div>
 
