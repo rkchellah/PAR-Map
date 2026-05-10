@@ -13,7 +13,7 @@ export async function getFraudChecks(): Promise<FraudCheck[]> {
     while (true) {
         const { data, error } = await supabase
             .from('fraud_checks')
-            .select('*')
+            .select('*, agent_id')
             .order('checked_at', { ascending: false })
             .range(from, from + PAGE - 1)
 
