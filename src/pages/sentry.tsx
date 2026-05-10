@@ -250,8 +250,9 @@ export default function SentryPage() {
 
     const customers = useMemo(() => {
         const jitter = () => (Math.random() - 0.5) * 0.008
-        return agents.map(agent => {
-            // Find latest check for this agent
+
+        // 1. Agent booth locations (colored by their latest check)
+        const agentCustomers = agents.map(agent => {
             const agentChecks = checks.filter(c => (c as FraudCheckExt).agent_id === agent.id)
             const latest = agentChecks.length > 0
                 ? agentChecks.reduce((prev, curr) =>
@@ -259,7 +260,6 @@ export default function SentryPage() {
                 )
                 : null
 
-            // If filter is active, only show if latest matches
             if (verdictFilter && (!latest || latest.verdict !== verdictFilter)) return null
 
             const coords = LUSAKA_COORDS[agent.primary_location] ?? LUSAKA_COORDS['Unknown']
@@ -276,7 +276,28 @@ export default function SentryPage() {
                 latitude: coords.lat + jitter(),
                 longitude: coords.lng + jitter(),
             }
-        }).filter(Boolean)
+        })
+
+        // 2. Standalone checks (Owner checks from navbar) - plot at dropdown location
+        const standaloneCustomers = checks
+            .filter(c => !(c as FraudCheckExt).agent_id)
+            .map(check => {
+                if (verdictFilter && check.verdict !== verdictFilter) return null
+                return {
+                    contract_ref: check.id,
+                    name: `Owner Check: ${check.phone_number}`,
+                    phone: check.phone_number,
+                    phone2: '',
+                    area: check.agent_location,
+                    par_status: VERDICT_TO_PAR[check.verdict],
+                    lead_generate: '',
+                    lead_generate_name: '',
+                    latitude: check.latitude,
+                    longitude: check.longitude,
+                }
+            })
+
+        return [...agentCustomers, ...standaloneCustomers].filter(Boolean)
     }, [agents, checks, verdictFilter])
 
     const checksById = useMemo(() => {
