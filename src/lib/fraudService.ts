@@ -3,7 +3,7 @@
 // Same pattern as customerService.ts — paginated fetch, same client.
 
 import { supabase } from './supabase'
-import { FraudCheck, LUSAKA_COORDS } from '../types/sentry'
+import { FraudCheck, BoothLocation } from '../types/sentry'
 
 export async function getFraudChecks(): Promise<FraudCheck[]> {
     const PAGE = 1000
@@ -18,19 +18,7 @@ export async function getFraudChecks(): Promise<FraudCheck[]> {
             .range(from, from + PAGE - 1)
 
         if (error) throw error
-
-        const resolved = (data ?? []).map(row => {
-            const coords = LUSAKA_COORDS[row.agent_location] ?? LUSAKA_COORDS['Unknown']
-            // Add a small random offset so stacked markers from the same area spread out
-            const jitter = () => (Math.random() - 0.5) * 0.012
-            return {
-                ...row,
-                latitude: coords.lat + jitter(),
-                longitude: coords.lng + jitter(),
-            } as FraudCheck
-        })
-
-        all.push(...resolved)
+        all.push(...((data ?? []) as FraudCheck[]))
         if ((data?.length ?? 0) < PAGE) break
         from += PAGE
     }
@@ -38,7 +26,6 @@ export async function getFraudChecks(): Promise<FraudCheck[]> {
     return all
 }
 
-// Fetch only flagged checks (CAUTION + STOP) for the map overlay
 export async function getFlaggedChecks(): Promise<FraudCheck[]> {
     const { data, error } = await supabase
         .from('fraud_checks')
@@ -48,14 +35,13 @@ export async function getFlaggedChecks(): Promise<FraudCheck[]> {
         .limit(200)
 
     if (error) throw error
-
-    return (data ?? []).map(row => {
-        const coords = LUSAKA_COORDS[row.agent_location] ?? LUSAKA_COORDS['Unknown']
-        const jitter = () => (Math.random() - 0.5) * 0.012
-        return {
-            ...row,
-            latitude: coords.lat + jitter(),
-            longitude: coords.lng + jitter(),
-        } as FraudCheck
-    })
+    return (data ?? []) as FraudCheck[]
 }
+
+export async function getBoothLocations(): Promise<BoothLocation[]> {
+    const { data } = await supabase
+        .from('booth_locations')
+        .select('name, latitude, longitude')
+        .order('name')
+    return (data ?? []) as BoothLocation[]
+}

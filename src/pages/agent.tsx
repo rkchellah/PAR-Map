@@ -4,12 +4,10 @@ import Head from 'next/head'
 import Link from 'next/link'
 import { supabaseAgent as supabase } from '../lib/supabaseAgent'
 import { IconLogoMark, IconEye, IconEyeOff } from '../components/icons'
+import { getBoothLocations } from '../lib/fraudService'
+import { BoothLocation } from '../types/sentry'
 
-const LOCATIONS = [
-  'Cairo Road Shoprite', 'City Market', 'Down Town Lusaka', 'Mtendere Market',
-  'Lumumba Road', 'Town Centre Lusaka', 'Chilenje Market', 'Kalingalinga',
-  'Chibolya', 'Kanyama', 'Other',
-]
+
 
 const VERDICT_STYLES: Record<string, { bg: string; color: string; label: string }> = {
   SAFE:    { bg: '#f0fdf4', color: '#16a34a', label: 'SAFE' },
@@ -43,12 +41,14 @@ export default function AgentPage() {
 
   // Check form
   const [checkPhone,    setCheckPhone]    = useState('')
-  const [checkLocation, setCheckLocation] = useState(LOCATIONS[0])
+  const [checkLocation, setCheckLocation] = useState('')
+  const [boothLocations, setBoothLocations] = useState<BoothLocation[]>([])
   const [checking,      setChecking]      = useState(false)
   const [result,        setResult]        = useState<CheckResult | null>(null)
   const [checkError,    setCheckError]    = useState('')
 
   useEffect(() => {
+    fetchBoothLocations()
     const timeout = setTimeout(() => setAuthLoading(false), 3000)
 
     supabase.auth.getSession()
@@ -71,6 +71,14 @@ export default function AgentPage() {
 
     return () => { clearTimeout(timeout); subscription.unsubscribe() }
   }, [])
+
+  async function fetchBoothLocations() {
+    try {
+      const locs = await getBoothLocations()
+      setBoothLocations(locs)
+      if (locs.length > 0) setCheckLocation(locs[0].name)
+    } catch (err) { console.error(err) }
+  }
 
   async function loadAgent(userId: string) {
     const { data } = await supabase
@@ -332,7 +340,7 @@ export default function AgentPage() {
                   onChange={e => setCheckLocation(e.target.value)}
                   style={{ cursor: 'pointer' }}
                 >
-                  {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                  {boothLocations.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
                 </select>
               </div>
 

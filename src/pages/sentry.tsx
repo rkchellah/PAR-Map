@@ -11,9 +11,9 @@ import React, { useState, useEffect, useMemo, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import Head from 'next/head'
 
-import { FraudCheck, FraudStats, computeFraudStats, VERDICT_TO_PAR, LUSAKA_COORDS } from '../types/sentry'
+import { FraudCheck, FraudStats, computeFraudStats, VERDICT_TO_PAR, BoothLocation } from '../types/sentry'
 import { FraudPopupCard } from '../components/FraudPopupCard'
-import { getFraudChecks } from '../lib/fraudService'
+import { getFraudChecks, getBoothLocations } from '../lib/fraudService'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/useAuth'
 import type { PARStatus } from '../types/par'
@@ -90,12 +90,6 @@ const MAP_STYLES = [
     { id: 'satellite', label: 'Satellite', style: 'mapbox/satellite-streets-v12' },
 ]
 
-const LOCATIONS = [
-    'Cairo Road Shoprite', 'City Market', 'Down Town Lusaka', 'Mtendere Market',
-    'Lumumba Road', 'Town Centre Lusaka', 'Chilenje Market', 'Kalingalinga',
-    'Chibolya', 'Kanyama', 'Other'
-]
-
 // Convert FraudCheck to Customer shape so the existing Map component
 // renders markers without any modifications.
 // Verdict maps to par_status so PAR_COLORS picks the right colour.
@@ -127,7 +121,8 @@ export default function SentryPage() {
     const [hovered, setHovered] = useState(false)
     const hoverRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const [checkPhone, setCheckPhone] = useState('')
-    const [checkLocation, setCheckLocation] = useState(LOCATIONS[0])
+    const [checkLocation, setCheckLocation] = useState('')
+    const [boothLocations, setBoothLocations] = useState<BoothLocation[]>([])
     const [checking, setChecking] = useState(false)
     const [showLogs, setShowLogs] = useState(false)
     const [logs, setLogs] = useState<LogRow[]>([])
@@ -148,6 +143,14 @@ export default function SentryPage() {
             .order('name')
         setAgents((data ?? []) as Agent[])
         setAgentsLoading(false)
+    }
+
+    async function fetchBoothLocations() {
+        try {
+            const locs = await getBoothLocations()
+            setBoothLocations(locs)
+            if (locs.length > 0) setCheckLocation(locs[0].name)
+        } catch (err) { console.error(err) }
     }
 
     async function fetchAgentChecks(agentId: string) {
@@ -187,12 +190,13 @@ export default function SentryPage() {
             const raw = await res.json()
 
             // Ensure the location matches what the user selected if backend didn't specify
-            const loc = raw.agent_location || checkLocation
-            const coords = LUSAKA_COORDS[loc] ?? LUSAKA_COORDS['Unknown']
+            const locName = raw.agent_location || checkLocation
+            const booth = boothLocations.find(l => l.name === locName) || boothLocations.find(l => l.name === 'Unknown') || boothLocations[0]
+            const coords = booth ? { lat: booth.latitude, lng: booth.longitude } : { lat: -15.4166, lng: 28.2833 }
             const jitter = () => (Math.random() - 0.5) * 0.012
             const newCheck: FraudCheck = {
                 ...raw,
-                agent_location: loc,
+                agent_location: locName,
                 latitude: coords.lat + jitter(),
                 longitude: coords.lng + jitter()
             }
@@ -215,7 +219,16 @@ export default function SentryPage() {
                 setChecks(prev => {
                     const existingIds = new Set(data.map(c => c.id))
                     const localOnly = prev.filter(c => !existingIds.has(c.id) && (Date.now() - new Date(c.checked_at).getTime() < 60_000))
-                    return [...localOnly, ...data]
+                    
+                    const resolved = data.map(check => {
+                        if (check.latitude && check.longitude) return check
+                        const booth = boothLocations.find(l => l.name === check.agent_location) || boothLocations.find(l => l.name === 'Unknown') || boothLocations[0]
+                        const coords = booth ? { lat: booth.latitude, lng: booth.longitude } : { lat: -15.4166, lng: 28.2833 }
+                        const jitter = () => (Math.random() - 0.5) * 0.012
+                        return { ...check, latitude: coords.lat + jitter(), longitude: coords.lng + jitter() }
+                    })
+
+                    return [...localOnly, ...resolved]
                 })
             })
             .catch(console.error)
@@ -224,12 +237,16 @@ export default function SentryPage() {
     // Auto-refresh every 30 seconds
     useEffect(() => {
         setLoading(true)
-        refreshChecks()
+        fetchBoothLocations()
         fetchAgents()
         const interval = setInterval(refreshChecks, 30_000)
-        setLoading(false) // This is a bit simplified but fits the existing logic
+        setLoading(false)
         return () => clearInterval(interval)
     }, [])
+
+    useEffect(() => {
+        if (boothLocations.length > 0) refreshChecks()
+    }, [boothLocations])
 
     // Persist map style
     useEffect(() => {
@@ -265,9 +282,10 @@ export default function SentryPage() {
             if (verdictFilter && (!latest || latest.verdict !== verdictFilter)) return null
 
             const hasStoredCoords = typeof agent.latitude === 'number' && typeof agent.longitude === 'number'
+            const booth = boothLocations.find(l => l.name === agent.primary_location) || boothLocations.find(l => l.name === 'Unknown') || boothLocations[0]
             const coords = hasStoredCoords 
                 ? { lat: agent.latitude!, lng: agent.longitude! }
-                : (LUSAKA_COORDS[agent.primary_location] ?? LUSAKA_COORDS['Unknown'])
+                : (booth ? { lat: booth.latitude, lng: booth.longitude } : { lat: -15.4166, lng: 28.2833 })
 
             return {
                 contract_ref: latest?.id || agent.id,
@@ -380,7 +398,7 @@ export default function SentryPage() {
                             style={{ width: 150, height: 34, background: T.low, border: 'none', borderRadius: 9, padding: '0 12px', fontSize: 12, outline: 'none', fontFamily: 'Manrope' }} />
                         <select value={checkLocation} onChange={e => setCheckLocation(e.target.value)}
                             style={{ height: 34, background: T.low, border: 'none', borderRadius: 9, padding: '0 10px', fontSize: 12, outline: 'none', fontFamily: 'Manrope', cursor: 'pointer' }}>
-                            {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                            {boothLocations.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
                         </select>
                         <button type="submit" disabled={checking}
                             style={{ height: 34, padding: '0 16px', background: T.primary, color: '#fff', border: 'none', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: checking ? 0.6 : 1, boxShadow: '0 2px 8px rgba(74,75,215,0.25)', transition: 'opacity 0.15s' }}>
