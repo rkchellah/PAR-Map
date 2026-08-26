@@ -14,7 +14,7 @@ export default function AuthCallback() {
     if (!router.isReady) return
 
     const code = router.query.code as string | undefined
-    const next = (router.query.next as string) || '/'
+    const next = (router.query.next as string) || '/map'
 
     async function exchange() {
       try {
@@ -44,18 +44,32 @@ export default function AuthCallback() {
           }
         }
 
-        // Fetch role so we can enforce admin-only redirect protection
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) { router.replace('/login?error=no_user'); return }
 
+        // Google users skip /register — create a profiles row if the trigger missed them.
+        // Never overwrite an existing role (that would demote admins).
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
           .eq('id', user.id)
-          .single()
+          .maybeSingle()
+
+        if (!profile) {
+          await supabase.from('profiles').insert({
+            id: user.id,
+            full_name: (user.user_metadata.full_name as string | undefined)
+              ?? (user.user_metadata.name as string | undefined)
+              ?? null,
+            avatar_url: (user.user_metadata.avatar_url as string | undefined)
+              ?? (user.user_metadata.picture as string | undefined)
+              ?? null,
+            role: 'user',
+          })
+        }
 
         if (next.startsWith('/admin') && profile?.role !== 'admin') {
-          router.replace('/')
+          router.replace('/login?error=admin_required')
         } else {
           router.replace(next)
         }

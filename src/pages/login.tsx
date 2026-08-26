@@ -9,6 +9,15 @@ import { IconLogoMark, IconEye, IconEyeOff } from '../components/icons'
 export default function LoginPage() {
   const router = useRouter()
   const next = (router.query.next as string) || '/admin'
+  const queryError = router.query.error as string | undefined
+  const queryErrorMessage =
+    queryError === 'admin_required'
+      ? 'You are signed in, but this Google account is not an admin.'
+      : queryError === 'oauth_failed'
+        ? 'Google sign-in failed. Try again.'
+        : queryError === 'no_session' || queryError === 'no_user'
+          ? 'Sign-in did not complete. Try again.'
+          : ''
 
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
@@ -156,9 +165,9 @@ export default function LoginPage() {
           </div>
 
           {/* Error */}
-          {error && (
+          {(error || queryErrorMessage) && (
             <div style={{ padding: '12px 14px', borderRadius: 8, background: '#fff1f2', border: '1px solid #fda4af', marginBottom: 20, fontSize: 13, color: '#be123c', fontWeight: 500 }}>
-              {error}
+              {error || queryErrorMessage}
             </div>
           )}
 

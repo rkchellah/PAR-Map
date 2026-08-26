@@ -9,7 +9,7 @@ import {
   toggleBufferLayerVisibility, updateBufferLayerColor, renameBufferLayer,
 } from '../lib/layerService'
 import { useAuth } from '../lib/useAuth'
-import { syncCustomers, getCustomers } from '../lib/customerService'
+import { syncCustomers, getCustomers, clearCustomers, createCsvHeaderTransformer, csvRecordToInsert, type CustomerInsert } from '../lib/customerService'
 import { supabase } from '../lib/supabase'
 import { Customer, isPriorityVisit, PAR_COLORS } from '../types/par'
 import type { KMZLayer } from '../types/par'
@@ -280,6 +280,7 @@ function AdminContent({ signOut }: { signOut: () => void }) {
   const [showNewTeam, setShowNewTeam]   = useState(false)
   const [teamOpen, setTeamOpen]         = useState<Record<string, boolean>>({})
   const [assignModal, setAssignModal]   = useState<{ layerId: string; layerName: string } | null>(null)
+  const [teamStatus, setTeamStatus]     = useState<Status>({ type: 'idle', msg: '' })
 
   const [csvFile, setCsvFile]     = useState<File | null>(null)
   const [radius, setRadius]       = useState('100')
@@ -321,12 +322,14 @@ function AdminContent({ signOut }: { signOut: () => void }) {
     if (!newTeamName.trim()) return
     const t: Team = { id: crypto.randomUUID(), name: newTeamName.trim(), color: newTeamColor, layerIds: [] }
     const { error } = await supabase.from('teams').insert({ id: t.id, name: t.name, color: t.color, layer_ids: t.layerIds })
-    if (!error) { setTeams(prev => [...prev, t]); setNewTeamName(''); setShowNewTeam(false) }
+    if (error) { setTeamStatus({ type: 'err', msg: `Create team failed: ${error.message}` }); return }
+    setTeams(prev => [...prev, t]); setNewTeamName(''); setShowNewTeam(false); setTeamStatus({ type: 'idle', msg: '' })
   }
   async function deleteTeam(id: string) {
     if (!confirm('Delete team?')) return
     const { error } = await supabase.from('teams').delete().eq('id', id)
-    if (!error) setTeams(prev => prev.filter(t => t.id !== id))
+    if (error) { setTeamStatus({ type: 'err', msg: `Delete team failed: ${error.message}` }); return }
+    setTeams(prev => prev.filter(t => t.id !== id)); setTeamStatus({ type: 'idle', msg: '' })
   }
   async function assignToTeam(teamId: string, layerId: string) {
     const updated = teams.map(t => {
@@ -335,13 +338,16 @@ function AdminContent({ signOut }: { signOut: () => void }) {
       return t
     })
     const changed = updated.filter((t, i) => t !== teams[i])
-    await Promise.all(changed.map(t => supabase.from('teams').update({ layer_ids: t.layerIds }).eq('id', t.id)))
-    setTeams(updated); setAssignModal(null)
+    const results = await Promise.all(changed.map(t => supabase.from('teams').update({ layer_ids: t.layerIds }).eq('id', t.id)))
+    const failed = results.find(r => r.error)
+    if (failed?.error) { setTeamStatus({ type: 'err', msg: `Assign failed: ${failed.error.message}` }); return }
+    setTeams(updated); setAssignModal(null); setTeamStatus({ type: 'idle', msg: '' })
   }
   async function removeFromTeam(teamId: string, layerId: string) {
     const updatedIds = teams.find(t => t.id === teamId)?.layerIds.filter(i => i !== layerId) ?? []
-    await supabase.from('teams').update({ layer_ids: updatedIds }).eq('id', teamId)
-    setTeams(prev => prev.map(t => t.id === teamId ? { ...t, layerIds: updatedIds } : t))
+    const { error } = await supabase.from('teams').update({ layer_ids: updatedIds }).eq('id', teamId)
+    if (error) { setTeamStatus({ type: 'err', msg: `Remove failed: ${error.message}` }); return }
+    setTeams(prev => prev.map(t => t.id === teamId ? { ...t, layerIds: updatedIds } : t)); setTeamStatus({ type: 'idle', msg: '' })
   }
   async function handleLayerColorChange(id: string, color: string) {
     try { await updateLayerColor(id, color); loadLayers() } catch {}
@@ -387,7 +393,7 @@ function AdminContent({ signOut }: { signOut: () => void }) {
 
   function downloadTemplate() {
     const csv = [
-      'customer,contract_ref,area,latitude,longitude,par_status,contact_number,alt_contact_number',
+      'customer,contract_reference,area,latitude,longitude,par_status,contact_number,alt_contact_number',
       'Jane Banda,CTY0001234,Kabanana,-15.382,28.271,ONTIME,+260970000000,+260960000000'
     ].join('\n')
     const a = document.createElement('a')
@@ -397,55 +403,42 @@ function AdminContent({ signOut }: { signOut: () => void }) {
 
   function onParCsvSelect(f: File) {
     setParCsv(f); setParStatus({ type: 'idle', msg: '' })
-    Papa.parse(f, { header: true, skipEmptyLines: true, complete: r => {
-      const normalized = (r.data as Record<string, string>[]).slice(0, 10).map(row => {
-        const n: Record<string, string> = {}
-        Object.keys(row).forEach(k => { n[k.toLowerCase().trim()] = row[k] })
-        return n
-      })
-      setPrev3(normalized)
-    }})
+    Papa.parse(f, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: createCsvHeaderTransformer(),
+      complete: r => {
+        setPrev3((r.data as Record<string, string>[]).slice(0, 10))
+      },
+    })
   }
 
   async function handleGenerateCustomers() {
     if (!parCsv) return
     setParStatus({ type: 'loading', msg: 'Syncing to database...' })
-    Papa.parse(parCsv, { header: true, skipEmptyLines: true, complete: async (res) => {
-      const rows: Record<string, unknown>[] = []; let skipped = 0
-      const formatPhone = (val: string) => {
-        if (!val) return ''
-        const trimmed = val.trim()
-        if (trimmed.includes('E+') || trimmed.includes('e+')) { const num = parseFloat(trimmed); if (!isNaN(num)) return Math.round(num).toString() }
-        return trimmed
-      }
-      for (const row of res.data as Record<string, string>[]) {
-        const r: Record<string, string> = {}
-        Object.keys(row).forEach(k => { r[k.toLowerCase().trim()] = row[k] })
-        const lat = parseFloat(r['latitude']), lon = parseFloat(r['longitude'])
-        if (!r['latitude'] || !r['longitude'] || isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || Math.abs(lat) > 90 || Math.abs(lon) > 180) { skipped++; continue }
-        rows.push({
-          customer: r['customer'] ?? r['name'] ?? '',
-          contract_ref: r['contract_ref'] || r['contract reference'] || r['code'] || '',
-          area: r['area'] ?? '',
-          par_status: r['par_status'] || r['par status'] || '',
-          par_category: r['par_category'] || r['par category'] || '',
-          arrears_total_days: parseInt(r['arrears_total_days'] || '0') || 0,
-          last_purchase_date: r['last_purchase_date'] || r['last purchase date'] || null,
-          days_since_last_purchase: parseInt(r['days_since_last_purchase'] || '0') || 0,
-          contact_number: formatPhone((r['contact_number'] || r['phone']) ?? ''),
-          alt_contact_number: formatPhone((r['alt_contact_number'] || r['phone 2']) ?? ''),
-          is_priority_visit: r['is_priority_visit'] === 'true',
-          latitude: lat,
-          longitude: lon,
-        })
-      }
-      try {
-        await syncCustomers(rows)
-        setParStatus({ type: 'ok', msg: `${rows.length} records synced. ${skipped} skipped.` })
-        setParCsv(null); setPrev3([])
-        getCustomers().then(data => { setLiveCustomers(data) }).catch(() => {})
-      } catch (e: unknown) { setParStatus({ type: 'err', msg: e instanceof Error ? e.message : 'Sync failed' }) }
-    }, error: () => setParStatus({ type: 'err', msg: 'Failed to parse CSV' }) })
+    Papa.parse(parCsv, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: createCsvHeaderTransformer(),
+      complete: async (res) => {
+        const rows: CustomerInsert[] = []
+        let skipped = 0
+        for (const row of res.data as Record<string, string>[]) {
+          const mapped = csvRecordToInsert(row)
+          if (!mapped) { skipped++; continue }
+          rows.push(mapped)
+        }
+        try {
+          await syncCustomers(rows)
+          setParStatus({ type: 'ok', msg: `${rows.length} records synced. ${skipped} skipped.` })
+          setParCsv(null); setPrev3([])
+          getCustomers().then(data => { setLiveCustomers(data) }).catch(() => {})
+        } catch (e: unknown) {
+          setParStatus({ type: 'err', msg: e instanceof Error ? e.message : 'Sync failed' })
+        }
+      },
+      error: () => setParStatus({ type: 'err', msg: 'Failed to parse CSV' }),
+    })
   }
 
   function handleGenerateBuffers() {
@@ -598,9 +591,13 @@ function AdminContent({ signOut }: { signOut: () => void }) {
                         <Btn variant="danger" size="sm" onClick={async () => {
                           if (!confirm('Delete all customer data? This cannot be undone.')) return
                           setParStatus({ type: 'loading', msg: 'Deleting...' })
-                          const { error } = await supabase.from('customers').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-                          if (error) setParStatus({ type: 'err', msg: error.message })
-                          else { setParStatus({ type: 'ok', msg: 'All customer data deleted.' }); setLiveCustomers([]) }
+                          try {
+                            const deleted = await clearCustomers()
+                            setParStatus({ type: 'ok', msg: deleted === 0 ? 'No customer rows to delete.' : `Deleted ${deleted.toLocaleString()} customers.` })
+                            setLiveCustomers([])
+                          } catch (e: unknown) {
+                            setParStatus({ type: 'err', msg: e instanceof Error ? e.message : 'Delete failed' })
+                          }
                         }}><IconTrash size={13} /> Clear all customer data</Btn>
                       </div>
                     </div>
@@ -661,6 +658,9 @@ function AdminContent({ signOut }: { signOut: () => void }) {
                           </div>
                           <FL>Team colour</FL><Swatches value={newTeamColor} onChange={setNewTeamColor} />
                         </div>
+                      )}
+                      {teamStatus.type === 'err' && (
+                        <div style={{ padding: '10px 20px' }}><StatusMsg s={teamStatus} /></div>
                       )}
                       {teams.length === 0 ? (
                         <div style={{ padding: '18px 20px', fontSize: 13, color: T.muted, fontFamily: 'Inter,system-ui,sans-serif' }}>No teams yet. Create a team to group layers by area circle.</div>
