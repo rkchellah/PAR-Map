@@ -196,7 +196,7 @@ export default function MapPage() {
   return (
     <>
       <Head>
-        <title>Supamoto Map</title>
+        <title>PAR Map</title>
         <style>{`
           *{box-sizing:border-box;margin:0;padding:0;}
           body{overflow:hidden;background:${T.canvas};font-family:'Manrope',sans-serif;-webkit-font-smoothing:antialiased;}
@@ -260,7 +260,7 @@ export default function MapPage() {
       {/* SIDE PANEL */}
       <aside onMouseEnter={onPanelEnter} onMouseLeave={onPanelLeave} style={{ position: 'fixed', left: 0, top: 52, bottom: 0, width: 268, zIndex: 900, background: 'rgba(255,255,255,0.93)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', display: 'flex', flexDirection: 'column', transform: panelVisible ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.22s cubic-bezier(0.4,0,0.2,1)', boxShadow: !pinned ? '8px 0 40px rgba(45,51,53,0.10)' : 'none' }}>
         <div style={{ height: 50, padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: T.onSurface }}>SUPAMOTO</div>
+          <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: T.onSurface }}>PAR MAP</div>
           <button onClick={() => { setPinned(v => !v); if (pinned) setHovered(false) }} style={{ width: 'auto', height: 'auto', background: 'none', backgroundColor: 'transparent', border: 'none', padding: 0, outline: 'none', boxShadow: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: pinned ? '#111111' : T.muted, transition: 'all 0.15s' }}>
             {pinned ? <IconPin size={16} /> : <IconLayers size={16} />}
           </button>

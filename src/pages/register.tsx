@@ -103,7 +103,7 @@ export default function RegisterPage() {
   return (
     <>
       <Head>
-        <title>Create account — Supamoto</title>
+        <title>Create account — PAR Map</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -146,7 +146,7 @@ export default function RegisterPage() {
           </div>
 
           <h1 style={{ fontSize: 32, fontWeight: 700, color: '#18181b', letterSpacing: '-0.04em', lineHeight: 1.1, marginBottom: 8 }}>Create account</h1>
-          <p style={{ fontSize: 15, color: '#a1a1aa', marginBottom: 32 }}>Join the Supamoto dashboard.</p>
+          <p style={{ fontSize: 15, color: '#a1a1aa', marginBottom: 32 }}>Join the PAR Map dashboard.</p>
 
           {/* Google */}
           <button className="google-btn" type="button" onClick={handleGoogle} style={{ marginBottom: 20 }}>

@@ -80,7 +80,7 @@ export default function LoginPage() {
   return (
     <>
       <Head>
-        <title>Sign In — Supamoto</title>
+        <title>Sign In — PAR Map</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -130,7 +130,7 @@ export default function LoginPage() {
             Sign in to your account
           </h1>
           <p style={{ fontSize: 14, color: '#71717a', marginBottom: 32, lineHeight: 1.6 }}>
-            Access the Supamoto Map dashboard.
+            Access the PAR Map dashboard.
           </p>
 
           {/* Google SSO */}
