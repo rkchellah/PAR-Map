@@ -9,6 +9,67 @@ protected by Supabase Auth (email/password + Google OAuth).
 
 ---
 
+## System flowchart
+
+How a request moves through the app: public map, sign-in, admin tools, and the services they call.
+
+```mermaid
+flowchart TD
+  visitor[Visitor] --> route{Which URL?}
+
+  route -->|/ or unknown| map404["/map via 404 redirect"]
+  route -->|/map| mapPage["Map page"]
+  route -->|/login /register| authPages["Auth pages"]
+  route -->|/admin| mw["middleware.ts"]
+
+  mapPage --> getCust["getCustomers()"]
+  mapPage --> getLayers["fetchLayers / fetchBufferLayers"]
+  getCust --> sbRead[(Supabase customers)]
+  getLayers --> sbLayers[(Supabase kmz_layers + buffer_layers)]
+  getLayers --> storage[(Supabase Storage kmz-files)]
+  mapPage --> leaflet["Leaflet + Mapbox tiles"]
+
+  mw -->|no session cookie| login["/login?next=/admin"]
+  mw -->|session cookie| adminPage["/admin"]
+
+  login --> email["Email + password"]
+  login --> google["Continue with Google"]
+
+  email --> sbAuth["Supabase Auth"]
+  google --> googleId["Google account picker"]
+  googleId --> sbCallback["Supabase /auth/v1/callback"]
+  sbCallback --> appCallback["/auth/callback"]
+  appCallback --> profile{"profiles.role = admin?"}
+  profile -->|yes| adminPage
+  profile -->|no| loginErr["/login?error=admin_required"]
+
+  sbAuth --> roleCheck{"profiles.role = admin?"}
+  roleCheck -->|yes| adminNav["Full navigation to /admin"]
+  roleCheck -->|no| denied["Stay on login"]
+  adminNav --> adminPage
+
+  adminPage --> useAuth["useAuth: session + profile"]
+  useAuth -->|not admin| login
+  useAuth -->|admin| dashboard["Admin dashboard"]
+
+  dashboard --> csv["Upload PAR CSV"]
+  dashboard --> kmz["Upload KMZ / KML"]
+  dashboard --> buf["Upload buffer CSV"]
+  dashboard --> clearBtn["Clear customer data"]
+
+  csv --> syncApi["POST /api/customers/sync"]
+  clearBtn --> clearApi["DELETE /api/customers/clear"]
+  syncApi --> svcRole["Service role: delete + insert customers"]
+  clearApi --> svcRole
+  kmz --> layerSvc["layerService.uploadLayer"]
+  buf --> bufSvc["uploadBufferLayer"]
+  layerSvc --> storage
+  layerSvc --> sbLayers
+  bufSvc --> sbLayers
+```
+
+---
+
 ## Pages
 
 | Route | Access | Purpose |
@@ -56,35 +117,38 @@ App
 
 ## Authentication Flow
 
+```mermaid
+flowchart TD
+  visitAdmin["Visit /admin"] --> cookie{"sb-*-auth-token cookie?"}
+  cookie -->|no| toLogin["Redirect /login?next=/admin"]
+  cookie -->|yes| adminMount["admin.tsx mounts"]
+
+  toLogin --> choose{"Sign-in method"}
+  choose -->|email| pwd["signInWithPassword"]
+  choose -->|Google| oauth["signInWithOAuth"]
+
+  pwd --> fetchRole["Load profiles.role"]
+  fetchRole -->|admin| fullNav["window.location.href = /admin"]
+  fetchRole -->|not admin| signOut["Sign out + error"]
+
+  oauth --> google["Google"]
+  google --> supabaseCb["Supabase /auth/v1/callback"]
+  supabaseCb --> appCb["/auth/callback"]
+  appCb --> exchange["exchangeCodeForSession"]
+  exchange --> upsert["Insert profiles row if missing"]
+  upsert --> adminRole{"role = admin?"}
+  adminRole -->|yes| nextAdmin["router.replace /admin"]
+  adminRole -->|no| notAdmin["/login?error=admin_required"]
+
+  fullNav --> adminMount
+  nextAdmin --> adminMount
+  adminMount --> useAuth["useAuth: getSession + fetchProfile"]
+  useAuth -->|loading| spinner["Spinner"]
+  useAuth -->|isAdmin| content["AdminContent"]
+  useAuth -->|not admin| backLogin["router.replace /login"]
 ```
-User visits /admin
-  → middleware.ts checks for sb-<ref>-auth-token cookie
-  → No cookie → redirect to /login?next=/admin
 
-User submits login form
-  → supabase.auth.signInWithPassword()
-  → Profile fetched → role checked
-  → Session confirmed via supabase.auth.getSession()
-  → window.location.href = /admin (full navigation, cookie present)
-
-admin.tsx mounts
-  → useAuth() runs getSession() + fetchProfile()
-  → loading=true until both resolve
-  → isAdmin=false → router.replace(/login) [only after loading=false]
-  → isAdmin=true  → renders AdminContent
-```
-
-### Google OAuth Flow
-
-```
-User clicks "Continue with Google"
-  → supabase.auth.signInWithOAuth({ redirectTo: /auth/callback })
-  → Google OAuth → Supabase → /auth/callback
-
-auth/callback.tsx
-  → getSession() → upsert profiles row (Google users have no register step)
-  → role check → router.replace(next || /)
-```
+Google never redirects to Next.js directly. It hits Supabase (`https://<project-ref>.supabase.co/auth/v1/callback`), then Supabase forwards to the allow-listed app URL (`https://par-map.vercel.app/auth/callback`).
 
 ### useAuth Race Condition Fix
 
@@ -111,40 +175,48 @@ supabase.auth.getSession().then(async ({ data: { session } }) => {
 
 ## Data Flow
 
+```mermaid
+flowchart LR
+  subgraph admin["Admin dashboard"]
+    csv["PAR CSV upload"]
+    kmz["KMZ / KML upload"]
+    buf["Buffer CSV upload"]
+  end
+
+  csv --> sync["POST /api/customers/sync"]
+  sync --> custTable[(customers)]
+
+  kmz --> upload["layerService.uploadLayer"]
+  upload --> bucket[(Storage: kmz-files)]
+  upload --> kmzTable[(kmz_layers)]
+
+  buf --> circles["36-point geodesic polygons"]
+  circles --> bufTable[(buffer_layers)]
+
+  subgraph map["Map page"]
+    dots["Customer markers by PAR colour"]
+    polys["Boundary polygons"]
+    bufs["Buffer circles"]
+  end
+
+  custTable --> dots
+  kmzTable --> parse["parseKmz / parseKml"]
+  bucket --> parse
+  parse --> polys
+  bufTable --> bufs
+```
+
 ### KMZ Boundaries
 
-```
-Admin uploads KMZ in /admin → Boundary Layers
-  → layerService.uploadLayer() → Supabase Storage (kmz-files bucket)
-  → Row inserted into kmz_layers table (name, color, locked, visible, file_path)
-
-Map page loads
-  → layerService.fetchLayers() → reads kmz_layers + signed URLs
-  → parseKmz() → GeoJSON FeatureCollection
-  → Rendered as Leaflet GeoJSON polygon layer
-  → LayerPanel shows toggle per layer (locked layers hidden from public)
-```
+Admin uploads a KMZ in **Boundary Layers**. `layerService.uploadLayer()` stores the file in the `kmz-files` bucket and inserts a `kmz_layers` row. The map fetches those rows, downloads the file, parses it to GeoJSON, and draws Leaflet polygons. Locked layers are hidden from the public toggle list.
 
 ### Weekly Customer Data
 
-```
-Data analyst exports PAR CSV from loan system
-  → python scripts/csv_to_ts.py OR Admin → Customer Data → Generate customers.ts
-  → Replaces src/data/customers.ts
-  → isPriorityVisit() auto-flags serious overdue + no recent purchase
-  → Customer dots rendered as Leaflet CircleMarkers colored by PAR status
-  → Priority customers: red dot with yellow ring
-```
+A data analyst exports PAR CSV from the loan system and uploads it in **Customer Data**. The app maps CSV headers to table columns (`contract_reference`, `customer`, `contact_number`, …) and `POST /api/customers/sync` replaces the `customers` table. The map reads that table and colours dots by PAR status; `PAR 90+` is treated as a priority visit.
 
 ### Buffer Circles
 
-```
-Admin uploads CSV (Name, Latitude, Longitude) in /admin → Buffer Circles
-  → Geodesic polygon generated (36-point approximation per point)
-  → GeoJSON FeatureCollection uploaded as a layer
-  → Stored with name prefix "Buffers —" to separate from boundary layers
-  → Rendered on map alongside KMZ boundary layers
-```
+Admin uploads a CSV of Name / Latitude / Longitude. The app builds a 36-point geodesic polygon per point, stores it as a buffer layer, and draws it on the map next to KMZ boundaries.
 
 ---
 
